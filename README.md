@@ -1,4 +1,4 @@
-# 美股板块盯盘面板
+# 美股板块盯盘助手
 
 <p align="center">
   <img src="assets/logo.png" alt="WallHawk 华尔街之鹰" width="340">

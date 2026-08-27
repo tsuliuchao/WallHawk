@@ -19,5 +19,5 @@ uv pip install --python venv/bin/python -r requirements.txt
 #   export DATA_SOURCE=FUTU
 #   ./run.sh
 
-echo ">> 启动盯盘面板  http://localhost:${PORT:-8050}"
+echo ">> 启动盯盘助手  http://localhost:${PORT:-8050}"
 exec venv/bin/python app.py
