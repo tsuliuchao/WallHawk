@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>财经·地缘要闻</title>
+<link rel="icon" type="image/svg+xml" href="/assets/logo-icon.svg">
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#f6f8fa; --border:#d0d7de;
@@ -19,7 +20,8 @@
   /* 顶栏（复用盯盘页风格） */
   #bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 14px;
     align-items:center;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
-  .brand{font-size:15px;font-weight:600;letter-spacing:.5px}
+  .brand{font-size:15px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+  .brand img{width:22px;height:22px;border-radius:5px;vertical-align:middle}
   .brand .src{color:var(--muted);font-weight:400;font-size:12px;margin-left:4px}
   .tabs{display:flex;gap:2px;margin-right:14px}
   .tabs a{padding:4px 12px;border-radius:6px;font-size:13px;color:var(--muted);border:1px solid transparent}
@@ -68,7 +70,7 @@
 </head>
 <body>
 <header id="bar">
-  <div class="brand">财经·地缘要闻<span class="src" id="srcTag"></span></div>
+  <div class="brand"><img src="/assets/logo-icon.svg" alt="WallHawk">财经·地缘要闻<span class="src" id="srcTag"></span></div>
   <nav class="tabs">
     <a href="/">盯盘</a>
     <a href="/news" class="active">要闻</a>

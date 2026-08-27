@@ -20,7 +20,7 @@ import os
 import threading
 import time
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from config import Config
 from sectors import SECTORS
@@ -157,6 +157,15 @@ def fetch_all() -> dict:
         with _cache["lock"]:
             _cache["err"] = str(e)
         return _cache["data"]
+
+
+# ---------------- 静态资源（logo 等） ----------------
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+
+@app.route("/assets/<path:filename>")
+def assets(filename):
+    return send_from_directory(ASSETS_DIR, filename)
 
 
 # ---------------- 路由 ----------------

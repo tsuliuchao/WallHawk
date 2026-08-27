@@ -1,5 +1,9 @@
 # 美股板块盯盘面板
 
+<p align="center">
+  <img src="assets/logo.png" alt="WallHawk 华尔街之鹰" width="340">
+</p>
+
 单页面展示 **15 个热门美股板块**及成分股，每隔 X 秒自动拉取最新价，**含盘前 / 盘中 / 盘后**，并聚合财经要闻与价格触达提醒，辅助盘中决策。
 
 > [English version](./README_EN.md)

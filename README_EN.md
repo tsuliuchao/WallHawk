@@ -1,5 +1,9 @@
 # US Stock Sector Watch Dashboard
 
+<p align="center">
+  <img src="assets/logo.png" alt="WallHawk 华尔街之鹰" width="340">
+</p>
+
 A single-page dashboard that tracks **15 hot US stock sectors** and their constituents, auto-refreshing prices every X seconds with **pre-market / regular / after-hours** sessions, plus aggregated financial news and price-alert notifications.
 
 > [中文版本](./README.md)
