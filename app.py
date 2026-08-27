@@ -37,6 +37,21 @@ app.config["JSON_SORT_KEYS"] = False
 
 WATCHLIST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
 
+
+@app.before_request
+def _guard_writes():
+    """写接口鉴权：启用 ADMIN_TOKEN 时，POST/DELETE 必须携带匹配的 X-Admin-Token。
+
+    未启用时放行（此时仅靠 HOST=127.0.0.1 兜底）。GET 只读接口不受影响。
+    """
+    if not Config.ADMIN_TOKEN:
+        return None
+    if request.method in ("POST", "DELETE"):
+        token = request.headers.get("X-Admin-Token", "")
+        if token != Config.ADMIN_TOKEN:
+            return jsonify({"error": "未授权：缺少或错误的 X-Admin-Token"}), 401
+    return None
+
 # 今日关注板块 key：用户手动选择关注的标的，行首 ⭐ 一键加入/移出
 WATCH_KEY = "today_watch"
 
@@ -174,7 +189,8 @@ def index():
     return render_template("index.html",
                            sectors=load_sectors(),
                            refresh=Config.DEFAULT_REFRESH_SEC,
-                           source=Config.DATA_SOURCE)
+                           source=Config.DATA_SOURCE,
+                           admin_token=Config.ADMIN_TOKEN)
 
 
 @app.route("/news")

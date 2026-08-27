@@ -193,6 +193,8 @@
 const SECTORS = {{ sectors | tojson }};
 const DEFAULT_REFRESH = {{ refresh }};
 const SOURCE = {{ source | tojson }};
+const ADMIN_TOKEN = {{ admin_token | tojson }};
+const AUTH = ADMIN_TOKEN ? {'X-Admin-Token': ADMIN_TOKEN} : {};
 
 const STATES = {
   REGULAR:{label:'盘中', cls:'st-regular'},
@@ -470,7 +472,7 @@ async function addStock(key, symbol, name){
   setErr('');
   try{
     const r = await fetch(`/api/sectors/${key}/stocks`,{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,name})});
+      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify({symbol,name})});
     const j = await r.json();
     if(!r.ok){ setErr('添加失败: '+(j.error||r.status)); return; }
     await refreshSectors(); poll();
@@ -480,7 +482,7 @@ async function moveStock(symbol, from, to){
   setErr('');
   try{
     const r = await fetch('/api/stocks/move',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol,from,to})});
+      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify({symbol,from,to})});
     const j = await r.json();
     if(!r.ok){ setErr('移动失败: '+(j.error||r.status)); return; }
     await refreshSectors(); poll();
@@ -489,7 +491,7 @@ async function moveStock(symbol, from, to){
 async function removeStock(key, symbol){
   setErr('');
   try{
-    const r = await fetch(`/api/sectors/${key}/stocks/${symbol}`,{method:'DELETE'});
+    const r = await fetch(`/api/sectors/${key}/stocks/${symbol}`,{method:'DELETE',headers:AUTH});
     if(!r.ok){ const j=await r.json(); setErr('移除失败: '+(j.error||r.status)); return; }
     await refreshSectors();
   }catch(e){ setErr('移除异常: '+e.message); }
@@ -497,7 +499,7 @@ async function removeStock(key, symbol){
 async function setExpectPrice(symbol, price){
   try{
     const r = await fetch('/api/watch/'+encodeURIComponent(symbol)+'/expect',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({price})});
+      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify({price})});
     if(!r.ok){ const j=await r.json(); setErr('保存预期价失败: '+(j.error||r.status)); }
   }catch(e){ setErr('保存预期价异常: '+e.message); }
 }
@@ -506,7 +508,7 @@ async function toggleWatch(symbol, starEl){
   setErr('');
   const watching = starEl.classList.contains('on');
   try{
-    const r = await fetch('/api/watch/'+encodeURIComponent(symbol),{method: watching?'DELETE':'POST'});
+    const r = await fetch('/api/watch/'+encodeURIComponent(symbol),{method: watching?'DELETE':'POST',headers:AUTH});
     const j = await r.json();
     if(!r.ok){ setErr((watching?'移出':'加入')+'关注失败: '+(j.error||r.status)); return; }
     if(j.watched){ watched.add(symbol); } else { watched.delete(symbol); }
@@ -525,7 +527,7 @@ async function resetAll(){
   if(!confirm('恢复为默认板块与个股？当前自定义（添加/移动/移除）将丢失。')) return;
   setErr('');
   try{
-    await fetch('/api/reset',{method:'POST'});
+    await fetch('/api/reset',{method:'POST',headers:AUTH});
     await refreshSectors(); poll();
   }catch(e){ setErr('恢复失败: '+e.message); }
 }
@@ -653,7 +655,7 @@ async function doRecConfirm(){
   recMsg.textContent='添加中...';
   try{
     const r=await fetch('/api/sectors/'+key+'/stocks',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});
+      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify({symbol:sym})});
     const j=await r.json();
     if(!r.ok){ recMsg.textContent='添加失败: '+(j.error||r.status); return; }
     closeRec(); await refreshSectors(); poll();

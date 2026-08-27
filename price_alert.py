@@ -12,16 +12,14 @@ alert_state.json，重启不重复提醒；首次观察时已低于预期价不�
 import json
 import logging
 import os
-import subprocess
-import sys
 import threading
 
 from config import Config
+from utils.weichat_notify import Notifier
 
 logger = logging.getLogger("price_alert")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-NOTIFY_SCRIPT = os.path.join(BASE_DIR, "utils", "weichat_notify.py")
 STATE_PATH = os.path.join(BASE_DIR, "alert_state.json")
 
 _lock = threading.Lock()
@@ -51,20 +49,21 @@ def _save_state():
 
 
 def _send(symbol: str, name: str, price: float, expect: float) -> bool:
-    """调用 weichat_notify.py 发送一条价格触达通知，返回是否成功。"""
+    """通过 Notifier 发送一条价格触达通知，返回是否成功。"""
     title = f"📉 {symbol} 价格触达"
     body = f"**{name} ({symbol})** 现价 {price} 已 ≤ 预期价 {expect}"
-    cmd = [sys.executable, NOTIFY_SCRIPT, "--channel", Config.ALERT_CHANNEL,
-           "--title", title, "--body", body]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        out = (r.stdout or "").strip()
-        if "发送成功" in out:
+        notifier = Notifier()
+        fn = getattr(notifier, Config.ALERT_CHANNEL, None)
+        if fn is None:
+            logger.warning("未知提醒通道 %s", Config.ALERT_CHANNEL)
+            return False
+        ok, resp = fn(title, body)
+        if ok:
             logger.info("价格触达通知已发送: %s (%.2f <= %.2f)", symbol, price, expect)
-            return True
-        logger.warning("价格触达通知失败 %s: %s",
-                       symbol, out or (r.stderr or "").strip())
-        return False
+        else:
+            logger.warning("价格触达通知失败 %s: %s", symbol, resp)
+        return bool(ok)
     except Exception as e:
         logger.warning("价格触达通知异常 %s: %s", symbol, e)
         return False

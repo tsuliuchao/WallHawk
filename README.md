@@ -8,6 +8,10 @@
 
 > [English version](./README_EN.md)
 
+<p align="center">
+  <img src="assets/showimg.png" alt="美股板块盯盘助手 面板截图" width="900">
+</p>
+
 ---
 
 ## 特性
@@ -47,6 +51,12 @@ chmod +x run.sh
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python app.py
+```
+
+运行测试（纯逻辑 + Flask test client，全程无网络请求）：
+
+```bash
+python -m pytest
 ```
 
 ---
@@ -89,8 +99,9 @@ python app.py
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `DATA_SOURCE` | `SINA` | `SINA` / `TENCENT` / `YAHOO` / `FUTU` |
-| `HOST` | `0.0.0.0` | Web 监听地址 |
+| `HOST` | `127.0.0.1` | Web 监听地址（默认仅本机，局域网访问需显式设为 `0.0.0.0`）|
 | `PORT` | `8050` | Web 端口 |
+| `ADMIN_TOKEN` | 空 | 设置后，所有写接口（POST/DELETE）需携带 `X-Admin-Token` 头 |
 | `DEFAULT_REFRESH_SEC` | `10` | 前端默认刷新间隔 |
 | `QUOTE_CACHE_TTL` | `3` | 服务端行情缓存秒数，合并快速轮询 |
 | `YAHOO_BATCH_SIZE` | `50` | Yahoo 单次批量请求数 |
@@ -180,6 +191,8 @@ us_stock_dashboard/
 ├── templates/index.html    # 单页盯盘界面
 ├── templates/news.html     # 要闻界面
 ├── requirements.txt
+├── pytest.ini              # pytest 配置
+├── tests/                  # 测试套件（纯逻辑 + API，无网络依赖）
 ├── run.sh / run.bat
 ├── LICENSE                 # MIT 协议
 ├── README.md
@@ -193,6 +206,7 @@ us_stock_dashboard/
 ## 注意
 
 - 行情与新闻仅供决策参考，**非交易建议**。
+- **写接口默认仅监听本机回环**（`HOST=127.0.0.1`）。若需局域网/远程访问，请显式设置 `HOST=0.0.0.0` 并务必同时设置 `ADMIN_TOKEN`，否则同一网络内任何人都可增删你的自选股、修改预期价或一键恢复默认。
 - Yahoo 非官方接口可能因风控临时失效；富途需登录与 OpenD 在线。两者任一不可用时页面会显示异常提示并保留最近缓存。
 - 板块热门度排序参考富途美股框架，近似值，会随市场轮动变化。
 

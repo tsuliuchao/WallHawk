@@ -8,6 +8,10 @@ A single-page dashboard that tracks **15 hot US stock sectors** and their consti
 
 > [中文版本](./README.md)
 
+<p align="center">
+  <img src="assets/showimg.png" alt="WallHawk dashboard screenshot" width="900">
+</p>
+
 ---
 
 ## Features
@@ -47,6 +51,12 @@ Manual start:
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python app.py
+```
+
+Run the tests (pure logic + Flask test client, zero network access):
+
+```bash
+python -m pytest
 ```
 
 ---
@@ -89,8 +99,9 @@ Overseas sources are usually blocked on mainland China direct connections; they 
 | Variable | Default | Description |
 |---|---|---|
 | `DATA_SOURCE` | `SINA` | `SINA` / `TENCENT` / `YAHOO` / `FUTU` |
-| `HOST` | `0.0.0.0` | Listen address |
+| `HOST` | `127.0.0.1` | Listen address (loopback by default; set `0.0.0.0` for LAN access) |
 | `PORT` | `8050` | Port |
+| `ADMIN_TOKEN` | empty | When set, all write APIs (POST/DELETE) require an `X-Admin-Token` header |
 | `DEFAULT_REFRESH_SEC` | `10` | Default refresh interval |
 | `QUOTE_CACHE_TTL` | `3` | Server-side quote cache (s), coalesces fast polling |
 | `YAHOO_BATCH_SIZE` | `50` | Yahoo batch size |
@@ -180,6 +191,8 @@ us_stock_dashboard/
 ├── templates/index.html    # Dashboard UI
 ├── templates/news.html     # News UI
 ├── requirements.txt
+├── pytest.ini              # pytest config
+├── tests/                  # Test suite (pure logic + API, no network)
 ├── run.sh / run.bat
 ├── LICENSE                 # MIT License
 ├── README.md
@@ -193,6 +206,7 @@ us_stock_dashboard/
 ## Disclaimer
 
 - Quotes and news are for reference only, **not investment advice**.
+- **Write APIs listen on loopback by default** (`HOST=127.0.0.1`). For LAN/remote access, explicitly set `HOST=0.0.0.0` AND set `ADMIN_TOKEN`, otherwise anyone on the same network can add/remove your tickers, change target prices, or reset to defaults.
 - The Yahoo endpoint is unofficial and may fail under rate limiting; Futu requires login & OpenD. On failure the page shows a hint and keeps the last cached data.
 - Sector/hotness ordering is approximate (based on the Futu US framework) and changes with market rotation.
 

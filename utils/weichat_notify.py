@@ -1,41 +1,39 @@
 #!/usr/bin/env python3
-"""
-任务完成微信通知模块
-支持三种通道：企业微信群机器人 / PushPlus / Server酱
-用法：
+# -*- coding: utf-8 -*-
+"""微信通知模块（价格触达提醒用）。
+
+支持三种通道：企业微信群机器人 / PushPlus / Server酱。用法：
+
     export WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
     export PUSHPLUS_TOKEN="xxx"
     export SERVERCHAN_SENDKEY="xxx"
-    python notifier.py --channel wecom --title "任务完成" --body "报表已生成，耗时3分12秒"
+    python utils/weichat_notify.py --channel pushplus --title "标题" --body "正文"
+
+由 price_alert.py 直接 import Notifier 使用；也可单独作为 CLI 测试。
 """
 import argparse
 import json
 import os
 import time
-import urllib.request
-import urllib.parse
+
+import requests
 
 
 class Notifier:
-    """统一通知入口，带超时与重试"""
+    """统一通知入口，带超时与重试（指数退避）。"""
 
     def __init__(self, timeout=10, max_retries=3):
         self.timeout = timeout
         self.max_retries = max_retries
+        self.session = requests.Session()
 
     def _post(self, url, payload):
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         last_err = None
         for attempt in range(self.max_retries):
             try:
-                req = urllib.request.Request(
-                    url, data=data, headers={"Content-Type": "application/json"}
-                )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-                if result.get("code") == 200 or (
-                    "errcode" in result and result.get("errcode") == 0
-                ):
+                r = self.session.post(url, json=payload, timeout=self.timeout)
+                result = r.json()
+                if result.get("code") == 200 or result.get("errcode") == 0:
                     return True, result
                 last_err = result
             except Exception as e:
@@ -43,26 +41,12 @@ class Notifier:
             time.sleep(2 ** attempt)  # 指数退避: 1s, 2s, 4s
         return False, last_err
 
-    def _get(self, url):
-        last_err = None
-        for attempt in range(self.max_retries):
-            try:
-                with urllib.request.urlopen(url, timeout=self.timeout) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-                if result.get("code") == 200 or result.get("errcode", 0) == 0:
-                    return True, result
-                last_err = result
-            except Exception as e:
-                last_err = str(e)
-            time.sleep(2 ** attempt)
-        return False, last_err
-
     def wecom(self, title, body, webhook=None):
         """企业微信群机器人：markdown 消息"""
         webhook = webhook or os.environ.get("WECOM_WEBHOOK")
         if not webhook:
             return False, "缺少 WECOM_WEBHOOK 环境变量"
-        content = f"## ✅ {title}\n{body}"
+        content = f"## {title}\n{body}"
         return self._post(webhook, {
             "msgtype": "markdown",
             "markdown": {"content": content},
@@ -93,47 +77,13 @@ class Notifier:
         if not sendkey:
             return False, "缺少 SERVERCHAN_SENDKEY 环境变量"
         url = f"https://sctapi.ftqq.com/{sendkey}.send"
-        data = urllib.parse.urlencode({"title": title, "desp": body}).encode("utf-8")
         try:
-            req = urllib.request.Request(url, data=data)
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
+            r = self.session.post(url, data={"title": title, "desp": body},
+                                  timeout=self.timeout)
+            result = r.json()
             return result.get("code") == 0, result
         except Exception as e:
             return False, str(e)
-
-
-# ============ 在业务代码中集成 ============
-_sent_cache = set()  # 生产环境请换成 Redis，并加 TTL
-
-def notify_task_done(task_id, task_name, duration, result_url=None):
-    """
-    任务完成 hook：在任务状态变更为 success/fail 的地方调用
-    幂等：同一任务只通知一次
-    """
-    dedup_key = f"{task_id}:done"
-    if dedup_key in _sent_cache:
-        return  # 已通知过，跳过
-    _sent_cache.add(dedup_key)
-
-    status = "✅ 成功" if result_url else "❌ 失败"
-    body = f"> 任务：{task_name}\n> 状态：{status}\n> 耗时：{duration}"
-    if result_url:
-        body += f"\n> [查看结果]({result_url})"
-
-    notifier = Notifier()
-    # 按优先级依次尝试：企微 → PushPlus → Server酱
-    for channel, fn in [
-        ("wecom", notifier.wecom),
-        ("pushplus", notifier.pushplus),
-        ("serverchan", notifier.serverchan),
-    ]:
-        ok, resp = fn(f"任务完成通知", body)
-        if ok:
-            print(f"[notify] 通过 {channel} 发送成功")
-            return
-        print(f"[notify] {channel} 发送失败: {resp}")
-    print("[notify] 所有通道均失败，建议接入告警")
 
 
 if __name__ == "__main__":
@@ -148,4 +98,3 @@ if __name__ == "__main__":
     ok, resp = fn(args.title, args.body)
     print("发送成功" if ok else f"发送失败: {resp}")
     print(json.dumps(resp, ensure_ascii=False, indent=2))
-

@@ -17,6 +17,7 @@
 否则前端只展示信息源标签（标注"需代理"）。部署到海外或挂代理即可点亮。
 Bloomberg 无公开新闻 RSS，仅作信息源占位展示，不自动抓取。
 """
+import copy
 import json
 import logging
 import os
@@ -262,11 +263,11 @@ _cache = {"ts": 0.0, "data": None, "lock": threading.Lock(), "errors": {}}
 
 
 def fetch_all(force=False):
-    """返回 {groups:[...], updated, proxy_ok}。TTL 内返回缓存。"""
+    """返回 {groups:[...], updated, proxy_ok}。TTL 内返回缓存（深拷贝，防调用方污染）。"""
     now = time.time()
     with _cache["lock"]:
         if not force and _cache["data"] and now - _cache["ts"] < CACHE_TTL:
-            return _cache["data"]
+            return copy.deepcopy(_cache["data"])
     groups = []
     errors = {}
     active = SOURCES
@@ -292,7 +293,7 @@ def fetch_all(force=False):
         _cache["data"] = out
         _cache["ts"] = time.time()
         _cache["errors"] = errors
-    return out
+    return copy.deepcopy(out)
 
 
 def _warmup():

@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """行情数据源抽象层。
 
-默认 YahooProvider：通过 v7/finance/quote 批量取盘前/盘中/盘后价与 marketState。
-可选 FutuProvider：通过 futu-api + OpenD 取快照（需登录，懒加载）。
+默认 SinaProvider：通过 hq.sinajs.cn 批量取盘前/盘中/盘后价。
+可选 TencentProvider（qt.gtimg.cn，无独立盘前盘后价）、
+YahooProvider（v7/finance/quote，含 marketState，部分地区被墙）、
+FutuProvider（futu-api + OpenD 快照，需登录，懒加载）。
 
-两者返回统一的 Quote 结构，供 app.py 缓存与下发。
+各源返回统一的 Quote 结构，供 app.py 缓存与下发。工厂 get_provider() 依
+Config.DATA_SOURCE 分派，未匹配时回退到 SinaProvider。
 """
 from __future__ import annotations
 
@@ -279,7 +282,7 @@ class FutuProvider:
         return out
 
 
-# ---------------- 腾讯（默认，中国可直连免登录）----------------
+# ---------------- 腾讯（中国直连免登录，无独立盘前盘后价）----------------
 class TencentProvider:
     """qt.gtimg.cn 美股行情：us+代码 批量、GBK、~ 分隔。
 
