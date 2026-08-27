@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="WallHawk">
+  <defs>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16233F"/>
+      <stop offset="1" stop-color="#0A0F1E"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.42" r="0.78">
+      <stop offset="0" stop-color="#FBD86B"/>
+      <stop offset="0.55" stop-color="#F0A93A"/>
+      <stop offset="1" stop-color="#C8761F"/>
+    </radialGradient>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L8,3.5 L0,7 Z" fill="#FFFFFF"/>
+    </marker>
+  </defs>
+
+  <!-- badge -->
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#badge)" stroke="#23304E" stroke-width="1.5"/>
+
+  <!-- sclera (eye white) -->
+  <path d="M10,32 C21,15 43,15 54,32 C43,49 21,49 10,32 Z" fill="#F4F7FC"/>
+
+  <!-- golden iris -->
+  <path d="M17,32 C25,21.5 39,21.5 47,32 C39,42.5 25,42.5 17,32 Z" fill="url(#iris)"/>
+
+  <!-- dark pupil (vertical slit) -->
+  <ellipse cx="32" cy="32" rx="4.6" ry="7.6" fill="#0A0F1E"/>
+
+  <!-- rising trend arrow -->
+  <path d="M25,39 L30,30 L36,34 L42,24" fill="none" stroke="#FFFFFF" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)"/>
+
+  <!-- hawk brow / wing -->
+  <path d="M18,15 C26,9 38,9 46,15" fill="none" stroke="#F0A93A" stroke-width="2.4"
+        stroke-linecap="round" opacity="0.9"/>
+
+  <!-- sparkle -->
+  <circle cx="50" cy="13" r="1.7" fill="#FBD86B"/>
+</svg>

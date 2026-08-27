@@ -1,0 +1,5 @@
+flask>=3.0.0
+requests>=2.31.0
+feedparser>=6.0.10
+# 仅当使用富途 OpenAPI 数据源（DATA_SOURCE=FUTU）时需要：
+# futu-api>=8.5.0

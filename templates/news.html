@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>财经·地缘要闻</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f6f8fa; --border:#d0d7de;
+    --text:#1f2328; --muted:#59636e; --accent:#0969da;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:13px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  /* 顶栏（复用盯盘页风格） */
+  #bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 14px;
+    align-items:center;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .brand{font-size:15px;font-weight:600;letter-spacing:.5px}
+  .brand .src{color:var(--muted);font-weight:400;font-size:12px;margin-left:4px}
+  .tabs{display:flex;gap:2px;margin-right:14px}
+  .tabs a{padding:4px 12px;border-radius:6px;font-size:13px;color:var(--muted);border:1px solid transparent}
+  .tabs a:hover{color:var(--text);text-decoration:none}
+  .tabs a.active{color:var(--accent);border-color:var(--border);background:var(--panel2)}
+  .controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-left:auto}
+  .controls label{color:var(--muted);display:flex;align-items:center;gap:4px;font-size:12px}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+  select:focus,button:hover{border-color:var(--accent)}
+  button.active{border-color:var(--accent);color:var(--accent)}
+  .updated{color:var(--muted);font-size:12px}
+  .updated .cnt{color:var(--accent)}
+  .err{color:#f85149;font-size:12px}
+
+  /* 分类筛选条 */
+  .cats{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .cats button{padding:4px 10px}
+  .hint{color:var(--muted);font-size:11px;padding:5px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .hint b{color:var(--accent);font-weight:500}
+
+  /* 源卡片网格 */
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;padding:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--panel2)}
+  .src-name{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+  .src-name .badge{font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(110,118,129,.18);color:var(--muted);font-weight:600}
+  .src-name .badge.proxy{background:rgba(210,153,34,.14);color:#9a6700}
+  .src-meta{font-size:11px;color:var(--muted);white-space:nowrap}
+  .src-meta a{margin-left:6px}
+  .src-empty{padding:14px 10px;color:var(--muted);font-size:12px}
+  .src-empty .tag{display:inline-block;padding:1px 6px;border-radius:8px;background:rgba(210,153,34,.14);color:#9a6700;font-size:10px;margin-right:4px}
+  .src-error{padding:14px 10px;color:#f85149;font-size:12px}
+  ul{list-style:none;margin:0;padding:0}
+  li{padding:7px 10px;border-top:1px solid #d0d7de}
+  li:first-child{border-top:0}
+  li:hover{background:var(--panel2)}
+  .t{display:block;color:var(--text);font-size:13px;line-height:1.4}
+  .t:visited{color:#8250df}
+  .s{display:block;color:var(--muted);font-size:11px;margin-top:3px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{display:flex;justify-content:space-between;align-items:center;margin-top:3px}
+  .time{color:var(--muted);font-size:10px;white-space:nowrap}
+  .flag{font-size:9px;padding:0 5px;border-radius:6px;background:rgba(88,166,255,.12);color:#0969da}
+</style>
+</head>
+<body>
+<header id="bar">
+  <div class="brand">财经·地缘要闻<span class="src" id="srcTag"></span></div>
+  <nav class="tabs">
+    <a href="/">盯盘</a>
+    <a href="/news" class="active">要闻</a>
+  </nav>
+  <div class="controls">
+    <span id="updated" class="updated">加载中...</span>
+    <label>刷新
+      <select id="refreshSel">
+        <option value="60">60</option>
+        <option value="120">120</option>
+        <option value="180">180</option>
+        <option value="300">300</option>
+        <option value="600">600</option>
+      </select>秒
+    </label>
+    <button id="pauseBtn">暂停</button>
+    <button id="forceBtn">立即抓取</button>
+    <span id="errTip" class="err"></span>
+  </div>
+</header>
+<div class="cats" id="cats"></div>
+<div class="hint">💡 汇聚 <b>华尔街见闻 / 东方财富 / 36氪 / IT之家 / Cointelegraph / Seeking Alpha</b> 等<b>国内可直连</b>源 · <b>WSJ / Bloomberg / Reuters / CNBC / NYT / FT / Nikkei</b> 等境外源标注信息源（部署在海外或设 <b>HTTPS_PROXY</b> 即点亮）· 每源 top10</div>
+<main id="grid"></main>
+
+<script>
+const DEFAULT_REFRESH = {{ refresh }};
+const SOURCE = {{ source | tojson }};
+const CAT_LABEL = {finance:'财经', geopolitics:'地缘', tech:'科技', crypto:'加密'};
+
+let interval = +(localStorage.getItem('usd_news_interval') || DEFAULT_REFRESH);
+let paused = false;
+let lastPoll = 0;
+let lastData = null;
+let activeCat = 'all';
+
+const grid = document.getElementById('grid');
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function fmtRel(ts){
+  if(!ts) return '';
+  const d = Date.now()/1000 - ts;
+  if(d < 60) return Math.max(1,Math.floor(d))+'秒前';
+  if(d < 3600) return Math.floor(d/60)+'分前';
+  if(d < 86400) return Math.floor(d/3600)+'时前';
+  return Math.floor(d/86400)+'天前';
+}
+
+function renderGroups(groups){
+  grid.innerHTML = '';
+  const filtered = groups.filter(g=>{
+    if(activeCat==='all') return true;
+    return (g.cat||[]).includes(activeCat);
+  });
+  filtered.forEach(g=>{
+    const card = document.createElement('section');
+    card.className = 'card';
+    const badge = g.proxy_only ? '<span class="badge proxy">境外·需代理</span>' : '';
+    const note = g.note ? `<span class="badge proxy">${escapeHtml(g.note)}</span>` : '';
+    const home = g.home ? `<a href="${escapeHtml(g.home)}" target="_blank" rel="noopener">官网 ↗</a>` : '';
+    const cnt = g.items.length;
+    const langBadge = g.lang ? `<span class="badge">${g.lang.toUpperCase()}</span>` : '';
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="src-name">${escapeHtml(g.label)} ${badge}${note}${langBadge}</span>
+        <span class="src-meta">${cnt?cnt+' 条':'无'} ${home}</span>
+      </div>`;
+    if(cnt){
+      const ul = document.createElement('ul');
+      g.items.forEach(it=>{
+        const li = document.createElement('li');
+        const url = it.url ? escapeHtml(it.url) : '#';
+        const sum = it.summary ? `<span class="s">${escapeHtml(it.summary)}</span>` : '';
+        const tm = it.ts ? `<span class="time mono">${fmtRel(it.ts)}</span>` : '';
+        li.innerHTML = `<a class="t" href="${url}" target="_blank" rel="noopener">${escapeHtml(it.title||'(无标题)')}</a>${sum}
+          <div class="meta">${tm}<span></span></div>`;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    } else {
+      const empty = document.createElement('div');
+      if(g.error==='需代理' || g.error==='占位（无自动抓取）' || g.error==='境外源·需代理'){
+        empty.className = 'src-empty';
+        empty.innerHTML = `<span class="tag">${escapeHtml(g.error||'需代理')}</span>${escapeHtml(g.label)} 为境外源，当前未配置代理；点击官网手动浏览。`;
+      } else if(g.error){
+        empty.className = 'src-error';
+        empty.textContent = '抓取失败：'+g.error;
+      } else {
+        empty.className = 'src-empty';
+        empty.textContent = '暂无条目';
+      }
+      card.appendChild(empty);
+    }
+    grid.appendChild(card);
+  });
+}
+
+function renderCats(groups){
+  const cats = [{key:'all',label:'全部'}];
+  const seen = {};
+  (groups||[]).forEach(g=>(g.cat||[]).forEach(c=>{ if(!seen[c]){ seen[c]=1; cats.push({key:c,label:CAT_LABEL[c]||c}); } }));
+  const box = document.getElementById('cats');
+  box.innerHTML = cats.map(c=>`<button class="${c.key===activeCat?'active':''}" data-cat="${c.key}">${c.label}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    activeCat = b.dataset.cat;
+    box.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
+    if(lastData) renderGroups(lastData.groups);
+  }));
+}
+
+async function poll(force){
+  if(paused && !force) return;
+  try{
+    const url = '/api/news'+(force?'?force=1':'');
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    lastData = d;
+    renderCats(d.groups);
+    renderGroups(d.groups);
+    lastPoll = Date.now();
+    setErr('');
+  }catch(e){ setErr('抓取异常: '+e.message); }
+}
+
+function setErr(msg){ document.getElementById('errTip').textContent = msg; }
+function fmtTime(d){ return d.toLocaleTimeString('zh-CN',{hour12:false}); }
+
+let pollTimer = null;
+function startTimer(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(()=>poll(false), interval*1000); }
+
+setInterval(()=>{
+  if(!paused){
+    const remain = Math.max(0, interval - Math.floor((Date.now()-lastPoll)/1000));
+    const u = document.getElementById('updated');
+    if(lastData){
+      const n = (lastData.groups||[]).reduce((a,g)=>a+g.items.length,0);
+      u.innerHTML = `已更新 ${fmtTime(new Date(lastData.updated*1000))} · ${n} 条 · <span class="cnt">${remain}s</span>`;
+    } else {
+      u.innerHTML = `<span class="cnt">${remain}s</span> 后刷新`;
+    }
+  }
+},1000);
+
+const refreshSel = document.getElementById('refreshSel');
+refreshSel.value = interval;
+refreshSel.addEventListener('change', e=>{
+  interval = +e.target.value; localStorage.setItem('usd_news_interval', interval);
+  if(!paused){ startTimer(); poll(false); }
+});
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', ()=>{
+  paused = !paused;
+  pauseBtn.textContent = paused?'继续':'暂停';
+  pauseBtn.classList.toggle('active', paused);
+  if(!paused){ startTimer(); poll(false); }
+  else if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+});
+document.getElementById('forceBtn').addEventListener('click', ()=>poll(true));
+
+document.getElementById('srcTag').textContent = '· ' + SOURCE;
+startTimer();
+poll(false);
+</script>
+</body>
+</html>

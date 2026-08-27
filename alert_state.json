@@ -1,0 +1,22 @@
+{
+  "SKHY": {
+    "expect": 160.0,
+    "last": 164.75
+  },
+  "UCTT": {
+    "expect": 73.0,
+    "last": 77.5
+  },
+  "COHR": {
+    "expect": 302.0,
+    "last": 306.5
+  },
+  "WDC": {
+    "expect": 480.0,
+    "last": 486.5
+  },
+  "SPCX": {
+    "expect": 139.0,
+    "last": 140.86
+  }
+}
