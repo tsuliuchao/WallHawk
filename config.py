@@ -45,3 +45,10 @@ class Config:
     ALERT_CHANNEL = os.environ.get("ALERT_CHANNEL", "pushplus")
     # 触达检查间隔（秒）
     ALERT_CHECK_INTERVAL = int(os.environ.get("ALERT_CHECK_INTERVAL", "10"))
+    # 滞回比例（%）：提醒后需回升/回落超过该百分比才重新武装，防止在预期价附近震荡重复提醒。
+    # 如设为 1 表示需超过 expect*1.01（向上）或 upper*0.99（向下）才重新武装。0=关闭滞回（纯边沿）。
+    ALERT_HYSTERESIS_PCT = float(os.environ.get("ALERT_HYSTERESIS_PCT", "1.0"))
+    # 单日跌幅阈值（%）：当日常规跌幅超过该值时触发"单日急跌"提醒，每标的每日至多一次。0=关闭。
+    ALERT_DAILY_DROP_PCT = float(os.environ.get("ALERT_DAILY_DROP_PCT", "0"))
+    # 仅在美股交易时段（盘前/盘中/盘后）检查价格提醒，避免休市期收盘价反复横跳触发误报。0=关闭(全天检查)
+    ALERT_SESSION_ONLY = int(os.environ.get("ALERT_SESSION_ONLY", "1")) == 1

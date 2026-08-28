@@ -27,7 +27,7 @@ A single-page dashboard that tracks **15 hot US stock sectors** and their consti
 | One-click sort by change % to spot leaders/laggards |
 | Switchable sources: SINA / TENCENT / YAHOO / FUTU OpenAPI |
 | Financial news aggregation page (flash + articles, fault-tolerant) |
-| Price alerts pushed to WeChat when price crosses below target |
+| Price alerts: bidirectional target (expect/upper) + daily-drop, pushed to WeChat |
 | Click a ticker to open its Yahoo Finance page |
 
 ---
@@ -58,6 +58,44 @@ Run the tests (pure logic + Flask test client, zero network access):
 ```bash
 python -m pytest
 ```
+
+---
+
+## Using the Dashboard
+
+### Header controls
+
+| Control | What it does |
+|---|---|
+| Refresh interval (5/10/15/30/60 s) | How often quotes auto-refresh (remembered locally) |
+| `暂停` / `继续` (Pause/Resume) | Pause or resume auto-refresh |
+| `按涨幅排` (Sort by change %) | When checked, stocks & sectors sort by change % descending (on by default, remembered locally) |
+| `红涨绿跌` / `绿涨红跌` | Toggle red-up/green-down vs green-up/red-down color convention (remembered locally) |
+| `智能入板` (Smart add) | Enter a ticker and get a recommended sector to add it to in one click |
+| `锁定顺序` (Lock order) | Lock sector order (stops auto re-sort by change %); with it on, **drag sector headers** to reorder manually |
+| `恢复默认` (Reset) | Restore the default sectors/stocks from `sectors.py` (clears customizations) |
+| `测试提醒` (Test alert) | Send a test WeChat notification to verify the alert channel |
+| Status badge + ET clock | Market state (盘中/盘前/盘后/休市) + current Eastern Time |
+| `已更新 HH:MM:SS · Ns` | Last refresh time + countdown to the next one |
+
+### Sector cards
+
+- **Add a stock**: type a ticker in the input at the bottom of a card (name auto-fetched if left blank), press Enter or click `＋`.
+- **Move a stock**: **drag** the stock row onto another sector card.
+- **Remove a stock**: hover the row, click `✕` on the right.
+- **Sector order**: by default sectors auto-sort by average change %; click `锁定顺序` to drag sector headers manually. 「今日关注」always stays pinned on top.
+
+### Stock row
+
+- **Ticker column**: `☆/★` adds/removes the stock to/from 「今日关注」; clicking the ticker opens its Yahoo Finance page.
+- **Price / change %**: flash-highlighted on change, colored by gain/loss.
+- **Session badge**: `盘中` (regular) / `盘前` (pre) / `盘后` (after) / `休市` (closed); extended-session prices come from the corresponding session.
+
+### 「今日关注」(Watch) board
+
+- Click the `☆` on any row to add that stock to the watch board (single row, always pinned on top).
+- **预期价 (Expect) / 上限价 (Upper)**: type a target in the inputs (auto-saved after a 0.4 s pause); the row turns green when the latest price hits below expect or above upper.
+- Stocks with a target price are checked by a background thread for **price-touch alerts** (see below), pushed to WeChat.
 
 ---
 
@@ -109,6 +147,9 @@ Overseas sources are usually blocked on mainland China direct connections; they 
 | `FUTU_HOST` / `FUTU_PORT` | `127.0.0.1` / `11111` | OpenD address |
 | `ALERT_CHANNEL` | `pushplus` | Channel: `pushplus` / `wecom` / `serverchan` |
 | `ALERT_CHECK_INTERVAL` | `10` | Alert check interval (s) |
+| `ALERT_HYSTERESIS_PCT` | `1.0` | Hysteresis %: after firing, must recover beyond this band before re-arming (prevents spam near target) |
+| `ALERT_DAILY_DROP_PCT` | `0` | Daily-drop alert threshold (%). Alerts once per symbol per day when intraday change ≤ -threshold; `0` disables |
+| `ALERT_SESSION_ONLY` | `1` | Only alert during active sessions (pre/regular/after-hours); `0` also checks when market closed |
 | `PUSHPLUS_TOKEN` | empty | PushPlus token (when `ALERT_CHANNEL=pushplus`) |
 | `WECOM_WEBHOOK` | empty | WeCom bot webhook (when `ALERT_CHANNEL=wecom`) |
 | `SERVERCHAN_SENDKEY` | empty | ServerChan sendkey (when `ALERT_CHANNEL=serverchan`) |
@@ -131,7 +172,9 @@ Overseas sources are usually blocked on mainland China direct connections; they 
 | `DELETE` | `/api/sectors/<key>/stocks/<symbol>` | Remove stock |
 | `POST` | `/api/watch/<symbol>` | Add to watch |
 | `DELETE` | `/api/watch/<symbol>` | Remove from watch |
-| `POST` | `/api/watch/<symbol>/expect` | Set target price `{price}` |
+| `POST` | `/api/watch/<symbol>/expect` | Set expect/upper price `{expect?, upper?}` (legacy `{price}` still works as expect) |
+| `GET` | `/api/alerts/history` | Recent alert history (reversed, max 50) |
+| `POST` | `/api/alerts/test` | Send a test notification to verify channel & token config |
 | `POST` | `/api/reset` | Reset to defaults |
 | `GET` | `/api/health` | Health |
 
@@ -141,7 +184,7 @@ Quote fields: `price`(active-session price) `prev_close` `change` `change_pct` `
 
 ## Price Alerts
 
-When the latest price of a watched stock with a **target price** crosses **downward** through that target (≤), a WeChat notification is pushed automatically.
+For watched stocks with a target price (**expect** or **upper**), a WeChat notification is pushed when the latest price **crosses below the expect price** or **crosses above the upper price**. A separate **daily-drop** alert is also supported.
 
 ### Usage
 
@@ -151,18 +194,26 @@ When the latest price of a watched stock with a **target price** crosses **downw
    - WeCom bot: `export ALERT_CHANNEL=wecom && export WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"`
    - ServerChan (free 5/day): `export ALERT_CHANNEL=serverchan && export SERVERCHAN_SENDKEY="your-sendkey"`
 
-2. **Set target on page**: open dashboard → "今日关注" → click ⭐ → fill target price (auto-saved on blur).
+   Channels and tokens can also go in `~/.config/wallhawk.env` (auto-loaded by `run.sh`).
 
-3. **Run and keep alive**: `./run.sh`; a background thread checks every 10s.
+2. **Set target on page**: open dashboard → "今日关注" → click ⭐ → fill target in the "预期价"/"上限价" fields (auto-saved on blur/pause).
 
-### Trigger Rules (Edge-Triggered)
+3. **(Optional) Self-test**: the "测试提醒" button in the header sends a test notification to confirm delivery.
 
-- Notifies **once** at the crossing moment; no repeat while it stays below.
-- Re-notifies only after price recovers above and crosses down again.
-- Changing the target resets tracking.
-- No alert if already below target at startup (no crossing edge).
+4. **Run and keep alive**: `./run.sh`; a background thread checks every 10s.
 
-> Alerts run in a Flask background thread — **keep the server process running**; state persists to `alert_state.json` so restarts don't re-send.
+### Trigger Rules (Edge-Triggered + Hysteresis-Armed)
+
+- **Cross below expect**: notifies **once** at the moment price crosses below (≤) the expect price; no repeat while it stays below.
+- **Cross above upper**: notifies **once** at the moment price crosses above (≥) the upper price; no repeat while it stays above.
+- **Hysteresis debounce**: after firing, the target disarms until price recovers beyond `expect×(1+hysteresis%)` (or retreats below `upper×(1-hysteresis%)`). Default 1% — prevents spam from churn near the target.
+- **Startup catch-up**: if a stock is already below its expect price at startup and was never notified, one "already reached" notification is sent (missed-crossing protection), then never repeated.
+- **Daily drop**: alerts once per symbol per calendar day when intraday change ≤ -`ALERT_DAILY_DROP_PCT` (off by default).
+- **Session-aware**: by default only checks during active sessions (pre/regular/after-hours); set `ALERT_SESSION_ONLY=0` to also check when closed.
+- Changing a target resets its tracking; expect and upper can coexist independently.
+- A "今日关注" row is highlighted when the latest price hits the expect/upper level.
+
+> Alerts run in a Flask background thread — **keep the server process running**; trigger history & state persist to `alert_state.json` (no repeats after restart, up to 50 history entries).
 
 ---
 

@@ -74,10 +74,10 @@
   tbody tr.hit{background:rgba(46,160,67,.14)}
   tbody tr.hit:hover{background:rgba(46,160,67,.20)}
   tbody tr.dragging{opacity:.35}
-  .c-expect input{width:56px;background:#f6f8fa;border:1px solid var(--border);color:var(--text);
-    border-radius:5px;padding:2px 4px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
-  .c-expect input:focus{outline:none;border-color:var(--accent)}
-  tbody tr.hit .c-expect input{border-color:#2da44e;color:#1a7f37}
+  .c-expect input,.c-upper input{width:76px;background:#f6f8fa;border:1px solid var(--border);color:var(--text);
+    border-radius:5px;padding:2px 5px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+  .c-expect input:focus,.c-upper input:focus{outline:none;border-color:var(--accent)}
+  tbody tr.hit .c-expect input,tbody tr.hit .c-upper input{border-color:#2da44e;color:#1a7f37}
   .c-code{font-weight:600;white-space:nowrap}
   .c-code a{color:var(--text)}
   .star{display:inline-block;border:0;background:none;padding:0 3px 0 0;margin:0;cursor:pointer;
@@ -167,6 +167,7 @@
     <button id="recBtn">智能入板</button>
     <button id="lockBtn" title="锁定后停止按涨跌幅自动重排，可拖拽板块标题栏手动排序">锁定顺序</button>
     <button id="resetBtn">恢复默认</button>
+    <button id="testAlertBtn" title="发送一条测试通知，验证微信推送通道">测试提醒</button>
     <span id="errTip" class="err"></span>
   </div>
 </header>
@@ -228,7 +229,8 @@ function makeRow(s, secKey){
   const isWatch = secKey === 'today_watch';
   const starOn = isWatch || watched.has(s.symbol);
   const expectCell = isWatch
-    ? `<td class="c-expect r"><input class="expect" type="number" step="any" min="0" placeholder="预期价" value="${s.expect_price==null?'':s.expect_price}"></td>`
+    ? `<td class="c-expect r"><input class="expect" type="number" step="any" min="0" placeholder="预期价" value="${s.expect_price==null?'':s.expect_price}"></td>
+       <td class="c-upper r"><input class="upper" type="number" step="any" min="0" placeholder="上限价" value="${s.upper_price==null?'':s.upper_price}"></td>`
     : '';
   tr.innerHTML = `
     <td class="c-code"><button class="star${starOn?' on':''}" title="${isWatch?'移出今日关注':'加入今日关注'}" draggable="false">${isWatch?'★':'☆'}</button><a href="https://finance.yahoo.com/quote/${s.symbol}" target="_blank" rel="noopener" draggable="false">${s.symbol}</a></td>
@@ -251,20 +253,22 @@ function makeRow(s, secKey){
     e.stopPropagation(); e.preventDefault();
     toggleWatch(s.symbol, tr.querySelector('.star'));
   });
-  const expectEl = tr.querySelector('.expect');
-  if(expectEl){
+  // 预期价 / 上限价：输入防抖后保存
+  [['expect', 'expect'], ['upper', 'upper']].forEach(([cls, field])=>{
+    const el = tr.querySelector('.'+cls);
+    if(!el) return;
     let saveTimer = null;
-    expectEl.addEventListener('input', ()=>{
+    el.addEventListener('input', ()=>{
       clearTimeout(saveTimer);
       saveTimer = setTimeout(()=>{
-        const raw = expectEl.value.trim();
+        const raw = el.value.trim();
         const price = raw===''? null : parseFloat(raw);
         if(raw!=='' && isNaN(price)) return;
-        expectEl.dataset.v = (price==null? '' : price);
-        setExpectPrice(s.symbol, price);
+        el.dataset.v = (price==null? '' : price);
+        setExpectPrice(s.symbol, field, price);
       }, 400);
     });
-  }
+  });
   return tr;
 }
 
@@ -286,7 +290,7 @@ function buildGrid(sectors){
       </div>
       <table><thead><tr>
         <th>代码</th><th>公司</th><th class="r">最新价</th>
-        <th class="r">涨跌幅</th>${isWatchSec?'<th class="r">预期价</th>':''}<th>状态</th>
+        <th class="r">涨跌幅</th>${isWatchSec?'<th class="r">预期价</th><th class="r">上限价</th>':''}<th>状态</th>
       </tr></thead><tbody></tbody></table>
       <div class="card-foot">
         <input class="add-sym" placeholder="代码 如 AAPL" maxlength="12">
@@ -362,12 +366,15 @@ function updateRow(tr, q){
   badge.textContent = st.label;
   badge.className = 'badge ' + st.cls;
 
-  // 预期价：最新价 < 预期价 时整行变绿（仅「今日关注」板块）
+  // 目标价：最新价 < 预期价 或 > 上限价 时整行高亮（仅「今日关注」板块）
   const expectEl = tr.querySelector('.expect');
   if(expectEl){
     const exp = parseFloat(expectEl.dataset.v);
-    const hit = newP!=null && !isNaN(exp) && newP < exp;
-    tr.classList.toggle('hit', hit);
+    const upEl = tr.querySelector('.upper');
+    const up = upEl ? parseFloat(upEl.dataset.v) : NaN;
+    const hitBelow = newP!=null && !isNaN(exp) && newP < exp;
+    const hitAbove = newP!=null && !isNaN(up) && newP > up;
+    tr.classList.toggle('hit', hitBelow || hitAbove);
   }
 }
 
@@ -496,12 +503,14 @@ async function removeStock(key, symbol){
     await refreshSectors();
   }catch(e){ setErr('移除异常: '+e.message); }
 }
-async function setExpectPrice(symbol, price){
+async function setExpectPrice(symbol, field, price){
+  const payload = {expect:null, upper:null};
+  payload[field] = price;
   try{
     const r = await fetch('/api/watch/'+encodeURIComponent(symbol)+'/expect',{method:'POST',
-      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify({price})});
-    if(!r.ok){ const j=await r.json(); setErr('保存预期价失败: '+(j.error||r.status)); }
-  }catch(e){ setErr('保存预期价异常: '+e.message); }
+      headers:{'Content-Type':'application/json',...AUTH},body:JSON.stringify(payload)});
+    if(!r.ok){ const j=await r.json(); setErr('保存目标价失败: '+(j.error||r.status)); }
+  }catch(e){ setErr('保存目标价异常: '+e.message); }
 }
 
 async function toggleWatch(symbol, starEl){
@@ -662,6 +671,18 @@ async function doRecConfirm(){
   }catch(e){ recMsg.textContent='异常: '+e.message; }
 }
 document.getElementById('recConfirm').addEventListener('click', doRecConfirm);
+
+// ---- 测试提醒 ----
+document.getElementById('testAlertBtn').addEventListener('click', async ()=>{
+  setErr('');
+  try{
+    const r = await fetch('/api/alerts/test',{method:'POST',headers:{'Content-Type':'application/json',...AUTH},
+      body:JSON.stringify({})});
+    const j = await r.json();
+    if(r.ok){ setErr('已发送测试通知 → '+j.channel); }
+    else setErr('测试提醒失败: '+(j.error||r.status));
+  }catch(e){ setErr('测试提醒异常: '+e.message); }
+});
 
 // ---- 启动 ----
 buildGrid(SECTORS);

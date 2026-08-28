@@ -209,7 +209,7 @@ def test_watch_idempotent_post(client, no_net):
 
 def test_expect_price_saved_on_watched_stock(client, no_net):
     client.post("/api/watch/FAKE")
-    r = client.post("/api/watch/Fake/expect", json={"price": 88.5})
+    r = client.post("/api/watch/Fake/expect", json={"expect": 88.5})
     assert r.status_code == 200 and r.get_json()["expect_price"] == 88.5
     secs = client.get("/api/sectors").get_json()
     watch = next(s for s in secs if s["key"] == "today_watch")
@@ -217,31 +217,120 @@ def test_expect_price_saved_on_watched_stock(client, no_net):
     assert st["expect_price"] == 88.5
 
 
+def test_upper_price_saved_and_listed(client, no_net):
+    client.post("/api/watch/FAKE")
+    r = client.post("/api/watch/FAKE/expect", json={"expect": 80, "upper": 120})
+    assert r.status_code == 200
+    assert r.get_json()["expect_price"] == 80 and r.get_json()["upper_price"] == 120
+    secs = client.get("/api/sectors").get_json()
+    watch = next(s for s in secs if s["key"] == "today_watch")
+    st = next(x for x in watch["stocks"] if x["symbol"] == "FAKE")
+    assert st["expect_price"] == 80 and st["upper_price"] == 120
+
+
+def test_upper_price_legacy_price_alias(client, no_net):
+    """旧前端用 body.price 表示预期价，仍兼容。"""
+    client.post("/api/watch/FAKE")
+    r = client.post("/api/watch/FAKE/expect", json={"price": 88.5})
+    assert r.status_code == 200 and r.get_json()["expect_price"] == 88.5
+
+
 def test_expect_price_can_be_cleared(client, no_net):
     client.post("/api/watch/FAKE")
-    client.post("/api/watch/FAKE/expect", json={"price": 10})
-    r = client.post("/api/watch/FAKE/expect", json={"price": None})
+    client.post("/api/watch/FAKE/expect", json={"expect": 10})
+    r = client.post("/api/watch/FAKE/expect", json={"expect": None})
     assert r.status_code == 200 and r.get_json()["expect_price"] is None
 
 
 def test_expect_price_bad_value_400(client, no_net):
     client.post("/api/watch/FAKE")
     assert client.post("/api/watch/FAKE/expect",
-                       json={"price": "not-a-number"}).status_code == 400
+                       json={"expect": "not-a-number"}).status_code == 400
+    assert client.post("/api/watch/FAKE/expect",
+                       json={"upper": "not-a-number"}).status_code == 400
 
 
 def test_expect_price_requires_watched_stock(client, no_net):
     assert client.post("/api/watch/NOWATCH/expect",
-                       json={"price": 5}).status_code == 404
+                       json={"expect": 5}).status_code == 404
 
 
 # ---------------- 预期价收集 ----------------
 def test_collect_expected_snapshot(client, no_net):
     client.post("/api/watch/FAKE")
-    client.post("/api/watch/FAKE/expect", json={"price": 12.3})
+    client.post("/api/watch/FAKE/expect", json={"expect": 12.3, "upper": 20.0})
     expected = app_module._collect_expected()
-    assert ("FAKE", "假想公司", 12.3) in expected
+    assert ("FAKE", "假想公司", 12.3, 20.0) in expected
 
 
 def test_collect_expected_empty_without_watch(client, no_net):
     assert app_module._collect_expected() == []
+
+
+def test_collect_expected_with_upper_only(client, no_net):
+    client.post("/api/watch/FAKE")
+    client.post("/api/watch/FAKE/expect", json={"expect": None, "upper": 55.0})
+    expected = app_module._collect_expected()
+    assert ("FAKE", "假想公司", None, 55.0) in expected
+
+
+# ---------------- 提醒历史 / 测试通知 / 健康 ----------------
+def test_alerts_history_empty_initial(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(app_module.price_alert, "STATE_PATH",
+                        str(tmp_path / "alert_state.json"))
+    app_module.price_alert._state = None
+    r = client.get("/api/alerts/history")
+    assert r.status_code == 200
+    assert r.get_json()["history"] == []
+
+
+def test_alerts_history_records_trigger(client, no_net, monkeypatch, tmp_path):
+    monkeypatch.setattr(app_module.price_alert, "STATE_PATH",
+                        str(tmp_path / "alert_state.json"))
+    app_module.price_alert._state = None
+    sent = []
+
+    def fake_send(symbol, name, price, level, kind):
+        sent.append(True)
+        return True
+
+    monkeypatch.setattr(app_module.price_alert, "_send", fake_send)
+    client.post("/api/watch/FAKE")
+    client.post("/api/watch/FAKE/expect", json={"expect": 100})
+    # 首观测在上方、随后下穿 → 触发 cross_below 并写入历史
+    app_module.price_alert.check_and_notify("FAKE", "假想公司", 105.0, 100.0)
+    app_module.price_alert.check_and_notify("FAKE", "假想公司", 99.0, 100.0)
+    r = client.get("/api/alerts/history")
+    assert r.status_code == 200
+    hist = r.get_json()["history"]
+    assert hist and hist[0]["kind"] == "cross_below" and hist[0]["symbol"] == "FAKE"
+
+
+def test_alerts_test_sends_notification(client, no_net, monkeypatch):
+    class FakeNotifier:
+        def pushplus(self, title, body):
+            return True, "ok"
+
+    monkeypatch.setattr(app_module.price_alert, "Notifier", FakeNotifier)
+    r = client.post("/api/alerts/test", json={"title": "测试", "body": "你好"})
+    assert r.status_code == 200
+    assert r.get_json()["channel"] == "pushplus"
+
+
+def test_alerts_test_failure_returns_500(client, no_net, monkeypatch):
+    class FailNotifier:
+        def pushplus(self, title, body):
+            return False, "缺少 PUSHPLUS_TOKEN"
+
+    monkeypatch.setattr(app_module.price_alert, "Notifier", FailNotifier)
+    r = client.post("/api/alerts/test", json={})
+    assert r.status_code == 500
+    assert "缺少" in r.get_json()["error"]
+
+
+def test_health_includes_alert_fields(client, no_net, monkeypatch):
+    monkeypatch.setenv("PUSHPLUS_TOKEN", "xxx")
+    r = client.get("/api/health")
+    body = r.get_json()
+    assert body["alert_channel"] == "pushplus"
+    assert body["alert_configured"] is True

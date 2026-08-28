@@ -54,7 +54,6 @@ def _guard_writes():
 
 # 今日关注板块 key：用户手动选择关注的标的，行首 ⭐ 一键加入/移出
 WATCH_KEY = "today_watch"
-
 # ---------------- 板块推荐关键词 ----------------
 # 用于按股票名/代码猜测所属板块；中文词与长度>=4的英文词做子串匹配，
 # 短英文代码(如 AI/EV/ARM)只与 symbol 精确匹配，避免误判。
@@ -345,15 +344,26 @@ def toggle_watch(symbol):
 
 @app.route("/api/watch/<symbol>/expect", methods=["POST"])
 def set_expect_price(symbol):
-    """保存「今日关注」板块中某只股票的预期价。body: {price: number|null}"""
+    """保存「今日关注」板块中某只股票的预期价/上限价。body: {expect?: number|null, upper?: number|null}"""
     sym = symbol.strip().upper()
     data = request.get_json(silent=True) or {}
-    price = data.get("price")
-    if price is not None:
+
+    def _num(v, field):
+        if v is None:
+            return None
         try:
-            price = float(price)
+            return float(v)
         except (TypeError, ValueError):
-            return jsonify({"error": "预期价格式错误"}), 400
+            raise ValueError(field)
+
+    # 兼容旧前端：body.price 作为预期价
+    expect = data.get("expect", data.get("price"))
+    upper = data.get("upper")
+    try:
+        expect = _num(expect, "预期价")
+        upper = _num(upper, "上限价")
+    except ValueError as e:
+        return jsonify({"error": f"{e}格式错误"}), 400
     with _sectors_lock:
         sec = _find_sector(WATCH_KEY)
         if not sec:
@@ -361,9 +371,10 @@ def set_expect_price(symbol):
         stock = next((st for st in sec["stocks"] if st["symbol"] == sym), None)
         if not stock:
             return jsonify({"error": "该股不在今日关注板块"}), 404
-        stock["expect_price"] = price
+        stock["expect_price"] = expect
+        stock["upper_price"] = upper
         _save()
-    return jsonify({"ok": True, "symbol": sym, "expect_price": price})
+    return jsonify({"ok": True, "symbol": sym, "expect_price": expect, "upper_price": upper})
 
 
 @app.route("/api/reset", methods=["POST"])
@@ -374,6 +385,30 @@ def reset():
         _save()
     logger.info("已恢复默认板块")
     return jsonify({"ok": True})
+
+
+@app.route("/api/alerts/history")
+def api_alerts_history():
+    return jsonify({"history": price_alert.history()})
+
+
+@app.route("/api/alerts/test", methods=["POST"])
+def api_alerts_test():
+    """发送一条测试通知，验证当前通道与令牌配置。"""
+    body = request.get_json(silent=True) or {}
+    title = body.get("title") or "WallHawk 测试通知"
+    text = body.get("body") or "这是一条测试消息，通知通道配置正常。"
+    notifier = price_alert.Notifier()
+    fn = getattr(notifier, Config.ALERT_CHANNEL, None)
+    if fn is None:
+        return jsonify({"error": f"未知提醒通道 {Config.ALERT_CHANNEL}"}), 400
+    try:
+        ok, resp = fn(title, text)
+    except Exception as e:
+        return jsonify({"error": f"测试通知发送异常: {e}"}), 500
+    if not ok:
+        return jsonify({"error": resp or "测试通知发送失败"}), 500
+    return jsonify({"ok": True, "channel": Config.ALERT_CHANNEL})
 
 
 @app.route("/api/health")
@@ -387,6 +422,9 @@ def api_health():
         "last_update": ts,
         "ok": ok,
         "error": err,
+        "alert_channel": Config.ALERT_CHANNEL,
+        # 只暴露是否已配置，绝不泄露令牌值本身
+        "alert_configured": bool(os.environ.get("PUSHPLUS_TOKEN") or os.environ.get("WECOM_WEBHOOK") or os.environ.get("SERVERCHAN_SENDKEY")),
     })
 
 
@@ -399,31 +437,47 @@ def _warmup():
 
 
 # ---------------- 价格触达提醒 ----------------
+def _in_active_session(q) -> bool:
+    """是否处于可提醒的活跃交易时段（盘前/盘中/盘后）。"""
+    return bool(q and q.market_state in ("PRE", "REGULAR", "POST"))
+
+
 def _collect_expected() -> list:
-    """收集「今日关注」板块中设置了预期价的标的快照。"""
+    """收集「今日关注」板块中设置了目标价（预期价/上限价）的标的快照。
+
+    返回 [(symbol, name, expect_price, upper_price), ...]，expect/upper 可能为 None。
+    """
     sec = _find_sector(WATCH_KEY)
     if not sec:
         return []
     out = []
     for st in sec["stocks"]:
         exp = st.get("expect_price")
-        if exp is not None:
-            out.append((st.get("symbol", "").upper(), st.get("name", ""), exp))
+        up = st.get("upper_price")
+        if exp is not None or up is not None:
+            out.append((st.get("symbol", "").upper(), st.get("name", ""), exp, up))
     return out
 
 
 def _alert_loop():
-    """后台轮询：对设置了预期价的标的，现价 <= 预期价时发送通知。"""
+    """后台轮询：对设置了目标价的标的做边沿+滞回检查，并做单日急跌提醒。"""
     while True:
         try:
             expected = _collect_expected()
             if expected:
-                syms = [s for s, _, _ in expected]
                 quotes = fetch_all()
-                for sym, name, exp in expected:
+                for sym, name, exp, up in expected:
                     q = quotes.get(sym)
+                    if not q:
+                        continue
+                    if Config.ALERT_SESSION_ONLY and not _in_active_session(q):
+                        continue  # 休市期不打扰，避免收盘价横跳误报
                     price = q.price if q else None
-                    price_alert.check_and_notify(sym, name, price, exp)
+                    # 启动后第一次轮询：用首次观测判断"启动时已低于预期价"的历史穿越，补发一次
+                    if not price_alert._state or (price_alert._state.get(sym, {}) or {}).get("last") is None:
+                        price_alert.notify_caught_below(sym, name, price, exp)
+                    price_alert.check_and_notify(sym, name, price, exp, up)
+                    price_alert.check_daily_drop(sym, name, price, q.change_pct)
         except Exception as e:
             logger.warning("价格提醒轮询异常: %s", e)
         time.sleep(Config.ALERT_CHECK_INTERVAL)
