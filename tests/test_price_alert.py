@@ -24,7 +24,7 @@ def alert_env(monkeypatch, tmp_path):
 
 
 def test_first_observation_already_below_does_not_alert(alert_env):
-    # 启动时已低于预期价，无下穿边沿，不提醒
+    # 启动时已低于下限价，无下穿边沿，不提醒
     assert price_alert.check_and_notify("NVDA", "英伟达", 90.0, 100.0) is False
     assert alert_env == []
 
@@ -106,7 +106,7 @@ def test_upper_cross_alerts_and_requires_retreat(monkeypatch, tmp_path):
 
 
 def test_both_targets_side_by_side(alert_env):
-    # 同一标的可同时设预期价与上限价（hb=0，回升即武装）
+    # 同一标的可同时设下限价与上限价（hb=0，回升即武装）
     assert price_alert.check_and_notify("NVDA", "英伟达", 105.0, 100.0, 110.0) is False
     assert price_alert.check_and_notify("NVDA", "英伟达", 99.0, 100.0, 110.0) is True   # 向下触发
     assert price_alert.check_and_notify("NVDA", "英伟达", 98.0, 100.0, 110.0) is False  # 停留在下方不重复
@@ -116,7 +116,7 @@ def test_both_targets_side_by_side(alert_env):
 
 def test_change_expect_resets_tracking(alert_env):
     assert price_alert.check_and_notify("NVDA", "英伟达", 105.0, 100.0) is False
-    # 改预期价后重置，之前已在上方不再算作「从上方下穿」
+    # 改下限价后重置，之前已在上方不再算作「从上方下穿」
     assert price_alert.check_and_notify("NVDA", "英伟达", 104.0, 120.0) is False
     assert alert_env == []
 
@@ -149,7 +149,7 @@ def test_send_failure_does_not_mark_sent(alert_env, monkeypatch):
 # ---------------- 启动补发（notify_caught_below） ----------------
 
 def test_caught_below_fires_once_on_startup(monkeypatch, tmp_path):
-    """启动时观测价已 ≤ 预期价：补发一次，永不重复。"""
+    """启动时观测价已 ≤ 下限价：补发一次，永不重复。"""
     monkeypatch.setattr(price_alert, "STATE_PATH",
                         str(tmp_path / "alert_state.json"))
     price_alert._state = None

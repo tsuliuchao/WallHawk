@@ -27,7 +27,7 @@ A single-page dashboard that tracks **15 hot US stock sectors** and their consti
 | One-click sort by change % to spot leaders/laggards |
 | Switchable sources: SINA / TENCENT / YAHOO / FUTU OpenAPI |
 | Financial news aggregation page (flash + articles, fault-tolerant) |
-| Price alerts: bidirectional target (expect/upper) + daily-drop, pushed to WeChat |
+| Price alerts: bidirectional target (lower/upper) + daily-drop, pushed to WeChat |
 | Click a ticker to open its Yahoo Finance page |
 
 ---
@@ -94,7 +94,7 @@ python -m pytest
 ### 「今日关注」(Watch) board
 
 - Click the `☆` on any row to add that stock to the watch board (single row, always pinned on top).
-- **预期价 (Expect) / 上限价 (Upper)**: type a target in the inputs (auto-saved after a 0.4 s pause); the row turns green when the latest price hits below expect or above upper.
+- **下限价 (Lower) / 上限价 (Upper)**: type a target in the inputs (auto-saved after a 0.4 s pause); the row turns green when the latest price hits below lower or above upper.
 - Stocks with a target price are checked by a background thread for **price-touch alerts** (see below), pushed to WeChat.
 
 ---
@@ -172,7 +172,7 @@ Overseas sources are usually blocked on mainland China direct connections; they 
 | `DELETE` | `/api/sectors/<key>/stocks/<symbol>` | Remove stock |
 | `POST` | `/api/watch/<symbol>` | Add to watch |
 | `DELETE` | `/api/watch/<symbol>` | Remove from watch |
-| `POST` | `/api/watch/<symbol>/expect` | Set expect/upper price `{expect?, upper?}` (legacy `{price}` still works as expect) |
+| `POST` | `/api/watch/<symbol>/expect` | Set lower/upper price `{expect?, upper?}` (legacy `{price}` still works as lower) |
 | `GET` | `/api/alerts/history` | Recent alert history (reversed, max 50) |
 | `POST` | `/api/alerts/test` | Send a test notification to verify channel & token config |
 | `POST` | `/api/reset` | Reset to defaults |
@@ -184,7 +184,7 @@ Quote fields: `price`(active-session price) `prev_close` `change` `change_pct` `
 
 ## Price Alerts
 
-For watched stocks with a target price (**expect** or **upper**), a WeChat notification is pushed when the latest price **crosses below the expect price** or **crosses above the upper price**. A separate **daily-drop** alert is also supported.
+For watched stocks with a target price (**lower** or **upper**), a WeChat notification is pushed when the latest price **crosses below the lower price** or **crosses above the upper price**. A separate **daily-drop** alert is also supported.
 
 ### Usage
 
@@ -196,7 +196,7 @@ For watched stocks with a target price (**expect** or **upper**), a WeChat notif
 
    Channels and tokens can also go in `~/.config/wallhawk.env` (auto-loaded by `run.sh`).
 
-2. **Set target on page**: open dashboard → "今日关注" → click ⭐ → fill target in the "预期价"/"上限价" fields (auto-saved on blur/pause).
+2. **Set target on page**: open dashboard → "今日关注" → click ⭐ → fill target in the "下限价"/"上限价" fields (auto-saved on blur/pause).
 
 3. **(Optional) Self-test**: the "测试提醒" button in the header sends a test notification to confirm delivery.
 
@@ -204,14 +204,14 @@ For watched stocks with a target price (**expect** or **upper**), a WeChat notif
 
 ### Trigger Rules (Edge-Triggered + Hysteresis-Armed)
 
-- **Cross below expect**: notifies **once** at the moment price crosses below (≤) the expect price; no repeat while it stays below.
+- **Cross below lower**: notifies **once** at the moment price crosses below (≤) the lower price; no repeat while it stays below.
 - **Cross above upper**: notifies **once** at the moment price crosses above (≥) the upper price; no repeat while it stays above.
-- **Hysteresis debounce**: after firing, the target disarms until price recovers beyond `expect×(1+hysteresis%)` (or retreats below `upper×(1-hysteresis%)`). Default 1% — prevents spam from churn near the target.
-- **Startup catch-up**: if a stock is already below its expect price at startup and was never notified, one "already reached" notification is sent (missed-crossing protection), then never repeated.
+- **Hysteresis debounce**: after firing, the target disarms until price recovers beyond `lower×(1+hysteresis%)` (or retreats below `upper×(1-hysteresis%)`). Default 1% — prevents spam from churn near the target.
+- **Startup catch-up**: if a stock is already below its lower price at startup and was never notified, one "already reached" notification is sent (missed-crossing protection), then never repeated.
 - **Daily drop**: alerts once per symbol per calendar day when intraday change ≤ -`ALERT_DAILY_DROP_PCT` (off by default).
 - **Session-aware**: by default only checks during active sessions (pre/regular/after-hours); set `ALERT_SESSION_ONLY=0` to also check when closed.
-- Changing a target resets its tracking; expect and upper can coexist independently.
-- A "今日关注" row is highlighted when the latest price hits the expect/upper level.
+- Changing a target resets its tracking; lower and upper can coexist independently.
+- A "今日关注" row is highlighted when the latest price hits the lower/upper level.
 
 > Alerts run in a Flask background thread — **keep the server process running**; trigger history & state persist to `alert_state.json` (no repeats after restart, up to 50 history entries).
 

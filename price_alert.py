@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """价格触达提醒。
 
-「今日关注」板块中设置了预期价(expect_price)的标的，当最新价从预期价**上方下穿**
-到预期价（<= 预期价）那一刻，通过 utils/weichat_notify.py（默认 pushplus 通道）
+「今日关注」板块中设置了下限价(expect_price)的标的，当最新价从下限价**上方下穿**
+到下限价（<= 下限价）那一刻，通过 utils/weichat_notify.py（默认 pushplus 通道）
 推送一条通知；同时支持设置 upper_price 时**向上突破**（>= 上限）的触达提醒。
 
 触发规则：
 - **边沿 + 滞回**：只在"下穿/上穿"瞬间提醒一次；提醒后进入未武装(disarmed)状态，
   必须等价格回升超过 `expect*(1+hysteresis)`（或回落到 `upper*(1-hysteresis)`）
-  才重新武装，杜绝预期价附近来回震荡导致的重复轰炸。
-- **启动补发**：启动时若某标的观测价已低于预期价且从未提醒过，补发一次
+  才重新武装，杜绝下限价附近来回震荡导致的重复轰炸。
+- **启动补发**：启动时若某标的观测价已低于下限价且从未提醒过，补发一次
   "已触达"通知（catch-up），随后持久化标记不再重复。避免"服务没开着/刚添加
   目标价"漏掉历史穿越。
 - 状态持久化到 alert_state.json，重启不重复提醒。
@@ -37,7 +37,7 @@ HISTORY_LIMIT = 50  # alert_state.json 中保留的最近触发历史条数
 def _load_state() -> dict:
     """载入状态。结构:
     {
-      SYMBOL: {"expect": 预期价, "last": 上次观测价, "armed": bool,
+      SYMBOL: {"expect": 下限价, "last": 上次观测价, "armed": bool,
                "caught_notified": bool, "upper": 上限价, "drop_notified_date": "YYYY-MM-DD"},
       "history": [{"ts":, "symbol":, "name":, "kind":, "price":, "level":, "ok":}],
     }
@@ -88,14 +88,14 @@ def _send(symbol: str, name: str, price: float, level: float, kind: str = "cross
         title = f"📈 {symbol} 突破上限"
         body = f"**{name} ({symbol})** 现价 {price} 已 ≥ 上限 {level}"
     elif kind == "caught_below":
-        title = f"📉 {symbol} 已触达预期价"
-        body = f"**{name} ({symbol})** 现价 {price} 已 ≤ 预期价 {level}（启动补发）"
+        title = f"📉 {symbol} 已触达下限价"
+        body = f"**{name} ({symbol})** 现价 {price} 已 ≤ 下限价 {level}（启动补发）"
     elif kind == "daily_drop":
         title = f"⚠️ {symbol} 单日急跌"
         body = f"**{name} ({symbol})** 现价 {price}，今日跌幅 {level:.2f}%"
     else:
         title = f"📉 {symbol} 价格触达"
-        body = f"**{name} ({symbol})** 现价 {price} 已 ≤ 预期价 {level}"
+        body = f"**{name} ({symbol})** 现价 {price} 已 ≤ 下限价 {level}"
     try:
         notifier = Notifier()
         fn = getattr(notifier, Config.ALERT_CHANNEL, None)
@@ -116,7 +116,7 @@ def _send(symbol: str, name: str, price: float, level: float, kind: str = "cross
 def check_and_notify(symbol: str, name: str, price, expect, upper=None) -> bool:
     """边沿+滞回触发：下穿/上穿时各发一次通知。
 
-    - expect: 预期价（向下目标，<= 触发）
+    - expect: 下限价（向下目标，<= 触发）
     - upper: 上限价（向上目标，>= 触发），可空
     返回是否在本次调用中发出通知。
     """
@@ -193,7 +193,7 @@ def check_and_notify(symbol: str, name: str, price, expect, upper=None) -> bool:
 
 
 def notify_caught_below(symbol: str, name: str, price, expect) -> bool:
-    """启动补发：观测价已 ≤ 预期价且从未提醒过时，补发一次。
+    """启动补发：观测价已 ≤ 下限价且从未提醒过时，补发一次。
 
     仅在进程启动时调用（首次观测），用"启动时已低于"判定历史穿越，避免漏报。
     已标记过 caught_notified 的标的永不重复补发。

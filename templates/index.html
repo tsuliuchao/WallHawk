@@ -51,7 +51,7 @@
     gap:12px;padding:12px}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;
     position:relative}
-  /* 今日关注多一列「预期价」，占两格避免右侧列被裁切 */
+  /* 今日关注多一列「下限价」，占两格避免右侧列被裁切 */
   .card[data-key="today_watch"]{grid-column:span 2}
   @media (max-width:720px){ .card[data-key="today_watch"]{grid-column:span 1} }
   .card.drop-over{outline:2px dashed var(--accent);outline-offset:-3px}
@@ -68,6 +68,8 @@
   thead th{color:var(--muted);font-weight:500;font-size:11px;text-align:left;padding:5px 6px;
     background:#f6f8fa;position:sticky;top:0}
   thead th.r{text-align:right}
+  /* 今日关注卡片较宽，标头全部居中对齐 */
+  .card[data-key="today_watch"] thead th{text-align:center}
   tbody td{padding:4px 6px;border-top:1px solid #d0d7de;vertical-align:middle}
   tbody tr{position:relative}
   tbody tr:hover{background:var(--panel2)}
@@ -229,7 +231,7 @@ function makeRow(s, secKey){
   const isWatch = secKey === 'today_watch';
   const starOn = isWatch || watched.has(s.symbol);
   const expectCell = isWatch
-    ? `<td class="c-expect r"><input class="expect" type="number" step="any" min="0" placeholder="预期价" value="${s.expect_price==null?'':s.expect_price}"></td>
+    ? `<td class="c-expect r"><input class="expect" type="number" step="any" min="0" placeholder="下限价" value="${s.expect_price==null?'':s.expect_price}"></td>
        <td class="c-upper r"><input class="upper" type="number" step="any" min="0" placeholder="上限价" value="${s.upper_price==null?'':s.upper_price}"></td>`
     : '';
   tr.innerHTML = `
@@ -253,7 +255,7 @@ function makeRow(s, secKey){
     e.stopPropagation(); e.preventDefault();
     toggleWatch(s.symbol, tr.querySelector('.star'));
   });
-  // 预期价 / 上限价：输入防抖后保存
+  // 下限价 / 上限价：输入防抖后保存
   [['expect', 'expect'], ['upper', 'upper']].forEach(([cls, field])=>{
     const el = tr.querySelector('.'+cls);
     if(!el) return;
@@ -290,7 +292,7 @@ function buildGrid(sectors){
       </div>
       <table><thead><tr>
         <th>代码</th><th>公司</th><th class="r">最新价</th>
-        <th class="r">涨跌幅</th>${isWatchSec?'<th class="r">预期价</th><th class="r">上限价</th>':''}<th>状态</th>
+        <th class="r">涨跌幅</th>${isWatchSec?'<th class="r">下限价</th><th class="r">上限价</th>':''}<th>状态</th>
       </tr></thead><tbody></tbody></table>
       <div class="card-foot">
         <input class="add-sym" placeholder="代码 如 AAPL" maxlength="12">
@@ -366,7 +368,7 @@ function updateRow(tr, q){
   badge.textContent = st.label;
   badge.className = 'badge ' + st.cls;
 
-  // 目标价：最新价 < 预期价 或 > 上限价 时整行高亮（仅「今日关注」板块）
+  // 目标价：最新价 < 下限价 或 > 上限价 时整行高亮（仅「今日关注」板块）
   const expectEl = tr.querySelector('.expect');
   if(expectEl){
     const exp = parseFloat(expectEl.dataset.v);

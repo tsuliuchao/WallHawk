@@ -186,7 +186,7 @@ def test_reset_restores_defaults(client, no_net):
     assert any(st["symbol"] == "NVDA" for st in semi["stocks"])
 
 
-# ---------------- 今日关注与预期价 ----------------
+# ---------------- 今日关注与下限价 ----------------
 def test_watch_toggle_roundtrip(client, no_net):
     r = client.post("/api/watch/Fake")
     assert r.status_code == 200 and r.get_json()["watched"] is True
@@ -229,7 +229,7 @@ def test_upper_price_saved_and_listed(client, no_net):
 
 
 def test_upper_price_legacy_price_alias(client, no_net):
-    """旧前端用 body.price 表示预期价，仍兼容。"""
+    """旧前端用 body.price 表示下限价，仍兼容。"""
     client.post("/api/watch/FAKE")
     r = client.post("/api/watch/FAKE/expect", json={"price": 88.5})
     assert r.status_code == 200 and r.get_json()["expect_price"] == 88.5
@@ -255,7 +255,7 @@ def test_expect_price_requires_watched_stock(client, no_net):
                        json={"expect": 5}).status_code == 404
 
 
-# ---------------- 预期价收集 ----------------
+# ---------------- 下限价收集 ----------------
 def test_collect_expected_snapshot(client, no_net):
     client.post("/api/watch/FAKE")
     client.post("/api/watch/FAKE/expect", json={"expect": 12.3, "upper": 20.0})

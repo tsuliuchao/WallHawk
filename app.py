@@ -344,7 +344,7 @@ def toggle_watch(symbol):
 
 @app.route("/api/watch/<symbol>/expect", methods=["POST"])
 def set_expect_price(symbol):
-    """保存「今日关注」板块中某只股票的预期价/上限价。body: {expect?: number|null, upper?: number|null}"""
+    """保存「今日关注」板块中某只股票的下限价/上限价。body: {expect?: number|null, upper?: number|null}"""
     sym = symbol.strip().upper()
     data = request.get_json(silent=True) or {}
 
@@ -356,11 +356,11 @@ def set_expect_price(symbol):
         except (TypeError, ValueError):
             raise ValueError(field)
 
-    # 兼容旧前端：body.price 作为预期价
+    # 兼容旧前端：body.price 作为下限价
     expect = data.get("expect", data.get("price"))
     upper = data.get("upper")
     try:
-        expect = _num(expect, "预期价")
+        expect = _num(expect, "下限价")
         upper = _num(upper, "上限价")
     except ValueError as e:
         return jsonify({"error": f"{e}格式错误"}), 400
@@ -443,7 +443,7 @@ def _in_active_session(q) -> bool:
 
 
 def _collect_expected() -> list:
-    """收集「今日关注」板块中设置了目标价（预期价/上限价）的标的快照。
+    """收集「今日关注」板块中设置了目标价（下限价/上限价）的标的快照。
 
     返回 [(symbol, name, expect_price, upper_price), ...]，expect/upper 可能为 None。
     """
@@ -473,7 +473,7 @@ def _alert_loop():
                     if Config.ALERT_SESSION_ONLY and not _in_active_session(q):
                         continue  # 休市期不打扰，避免收盘价横跳误报
                     price = q.price if q else None
-                    # 启动后第一次轮询：用首次观测判断"启动时已低于预期价"的历史穿越，补发一次
+                    # 启动后第一次轮询：用首次观测判断"启动时已低于下限价"的历史穿越，补发一次
                     if not price_alert._state or (price_alert._state.get(sym, {}) or {}).get("last") is None:
                         price_alert.notify_caught_below(sym, name, price, exp)
                     price_alert.check_and_notify(sym, name, price, exp, up)
