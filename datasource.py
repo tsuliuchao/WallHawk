@@ -93,8 +93,9 @@ def _norm_state(s: str) -> str:
 def _us_session_state() -> str:
     """按美东时间判定美股盘前/盘中/盘后/休市（自动处理夏令时）。
 
-    盘前 04:00-09:30 ET / 盘中 09:30-16:00 / 盘后 16:00-20:00 / 其余休市。
-    用于不直接返回 marketState 的数据源（如腾讯）。
+    盘前 04:00-09:30 ET / 盘中 09:30-16:00 / 盘后 16:00-午夜 / 其余休市。
+    盘后延续到午夜而非 20:00，与 Yahoo 的 POSTPOST→POST 归一化一致，
+    让晚间仍能看到盘后最新价。用于不直接返回 marketState 的数据源（如腾讯）。
     """
     from zoneinfo import ZoneInfo
     now = datetime.now(ZoneInfo("America/New_York"))
@@ -105,7 +106,7 @@ def _us_session_state() -> str:
         return "PRE"
     if dt_time(9, 30) <= t < dt_time(16, 0):
         return "REGULAR"
-    if dt_time(16, 0) <= t < dt_time(20, 0):
+    if t >= dt_time(16, 0):
         return "POST"
     return "CLOSED"
 
@@ -355,7 +356,12 @@ class SinaProvider:
     """hq.sinajs.cn 美股行情：gb_+代码 批量、GBK。
 
     字段（~36）：[0]名称 [1]最新常规价 [2]常规涨跌幅 [4]常规涨跌额
-    [21]盘前价 [26]昨收 [34]盘后价。盘前/盘后价独立可用，弥补腾讯不更新延展时段的缺陷。
+    [21]延展时段价 [22]延展涨跌额 [23]延展涨跌幅 [24]延展成交时间戳
+    [25]常规收盘时间戳 [26]昨收。
+
+    关键：延展时段价只存于 [21]/[22]/[23]（盘后晚间是盘后价、盘前清晨是盘前价），
+    用 [24] 与 [25] 的时间戳确认它属于盘前还是盘后。历史误读的 [34] 实为
+    近似收盘价，不可用作盘后价。
     """
     SOURCE = "SINA"
     URL = "https://hq.sinajs.cn/list="
@@ -399,8 +405,11 @@ class SinaProvider:
             if reg is None:
                 continue
             reg_pct = _f(f[2]); reg_chg = _f(f[4]); prev_close = _f(f[26])
-            pre = _f(f[21])
-            post = _f(f[34]) if len(f) > 34 else None
+            # 延展时段价统一存于 [21]（[22]涨跌额 [23]涨跌幅 [24]延展成交时间戳）：
+            # 盘后晚间是盘后价、盘前清晨是盘前价，按当前时段归位到 pre/post。
+            ext = _f(f[21])
+            pre = ext if state == "PRE" else None
+            post = ext if state == "POST" else None
             price, chg, pct, pc = _resolve_active(state, reg, reg_chg, reg_pct, prev_close, pre, post)
             out[sym] = Quote(
                 symbol=sym, name=f[0] or sym,
