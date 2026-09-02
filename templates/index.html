@@ -11,10 +11,14 @@
     --text:#1f2328; --muted:#59636e; --accent:#0969da;
     --up:#e5484d; --down:#26a69a;   /* 默认红涨绿跌，可由 JS 切换 */
     --flash-up:rgba(229,72,77,.28); --flash-down:rgba(38,166,154,.28);
+    --header-bg:#f6f8fa; --input-bg:#f6f8fa; --star:#c9ced6;
+    --radius:12px; --radius-sm:8px;
+    --shadow:0 1px 2px rgba(31,35,40,.04),0 1px 4px rgba(31,35,40,.05);
+    --shadow-lg:0 10px 30px rgba(31,35,40,.14);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-    font:13px/1.45 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif}
+    font:13px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif}
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
   .r{text-align:right;font-variant-numeric:tabular-nums}
@@ -22,7 +26,8 @@
 
   /* 顶栏 */
   #bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 14px;
-    align-items:center;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+    align-items:center;padding:10px 16px;background:var(--header-bg);border-bottom:1px solid var(--border);
+    box-shadow:0 1px 4px rgba(31,35,40,.05)}
   .brand{font-size:15px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
   .brand img{width:22px;height:22px;border-radius:5px;vertical-align:middle}
   .brand .src{color:var(--muted);font-weight:400;font-size:12px;margin-left:4px}
@@ -36,21 +41,22 @@
   .updated{color:var(--muted);font-size:12px}
   .updated .cnt{color:var(--accent)}
   .err{color:#f85149;font-size:12px;min-width:1px}
-  .state-badge{padding:2px 9px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid var(--border)}
-  .state-badge.st-regular{background:rgba(88,166,255,.15);color:#0969da;border-color:#1f6feb}
+  .state-badge{padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;border:1px solid var(--border)}
+  .state-badge.st-regular{background:rgba(88,166,255,.15);color:var(--accent);border-color:#1f6feb}
   .state-badge.st-pre{background:rgba(210,153,34,.15);color:#9a6700;border-color:#9e6a03}
   .state-badge.st-post{background:rgba(163,113,247,.15);color:#8250df;border-color:#8957e5}
-  .state-badge.st-closed{background:rgba(110,118,129,.12);color:#59636e}
-  .hint{color:var(--muted);font-size:11px;padding:5px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .state-badge.st-closed{background:rgba(110,118,129,.12);color:var(--muted)}
+  .hint{color:var(--muted);font-size:11px;padding:6px 16px;background:var(--header-bg);border-bottom:1px solid var(--border)}
   .hint b{color:var(--accent);font-weight:500}
 
   /* 板块卡片 */
   /* auto-fill 让卡片保持紧凑一致的宽度并按屏宽自动换行，
      空轨道吸收剩余空间，避免 auto-fit 在卡片不足一排时被强行拉宽 */
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
-    gap:12px;padding:12px}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;
-    position:relative}
+    gap:14px;padding:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+    position:relative;box-shadow:var(--shadow);transition:box-shadow .15s, transform .1s}
+  .card:hover{box-shadow:var(--shadow-lg)}
   /* 今日关注多一列「下限价」，占两格避免右侧列被裁切 */
   .card[data-key="today_watch"]{grid-column:span 2}
   @media (max-width:720px){ .card[data-key="today_watch"]{grid-column:span 1} }
@@ -58,32 +64,36 @@
   .card.card-dragging{opacity:.4}
   .card-head[draggable="true"]{cursor:grab}
   .card-head[draggable="true"]:active{cursor:grabbing}
-  .card-head{display:flex;flex-direction:column;padding:8px 10px 6px;border-bottom:1px solid var(--border);
-    background:var(--panel2)}
-  .sec-name{font-weight:600;font-size:13px}
+  .card-head{display:flex;flex-direction:column;padding:9px 12px 7px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,var(--panel2),#eef1f4)}
+  .sec-name{font-weight:700;font-size:13.5px}
   .sec-driver{color:var(--muted);font-size:11px;margin-top:2px}
-  .sec-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-  .sec-avg{font-weight:700;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sec-title{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .sec-avg{font-weight:700;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;
+    padding:1px 9px;border-radius:11px}
+  .sec-avg.up{background:rgba(229,72,77,.12);color:var(--up)}
+  .sec-avg.down{background:rgba(38,166,154,.12);color:var(--down)}
+  .sec-avg.flat{background:var(--header-bg);color:var(--muted)}
   table{width:100%;border-collapse:collapse}
-  thead th{color:var(--muted);font-weight:500;font-size:11px;text-align:left;padding:5px 6px;
-    background:#f6f8fa;position:sticky;top:0}
+  thead th{color:var(--muted);font-weight:600;font-size:11px;text-align:left;padding:6px 10px;
+    background:var(--header-bg);position:sticky;top:0}
   thead th.r{text-align:right}
   /* 今日关注卡片较宽，标头全部居中对齐 */
   .card[data-key="today_watch"] thead th{text-align:center}
-  tbody td{padding:4px 6px;border-top:1px solid #d0d7de;vertical-align:middle}
+  tbody td{padding:5px 10px;border-top:1px solid var(--border);vertical-align:middle}
   tbody tr{position:relative}
   tbody tr:hover{background:var(--panel2)}
   tbody tr.hit{background:rgba(46,160,67,.14)}
   tbody tr.hit:hover{background:rgba(46,160,67,.20)}
   tbody tr.dragging{opacity:.35}
-  .c-expect input,.c-upper input{width:76px;background:#f6f8fa;border:1px solid var(--border);color:var(--text);
-    border-radius:5px;padding:2px 5px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+  .c-expect input,.c-upper input{width:76px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:3px 6px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
   .c-expect input:focus,.c-upper input:focus{outline:none;border-color:var(--accent)}
   tbody tr.hit .c-expect input,tbody tr.hit .c-upper input{border-color:#2da44e;color:#1a7f37}
   .c-code{font-weight:600;white-space:nowrap}
   .c-code a{color:var(--text)}
   .star{display:inline-block;border:0;background:none;padding:0 3px 0 0;margin:0;cursor:pointer;
-    color:#c9ced6;font:inherit;font-size:13px;line-height:1;vertical-align:middle}
+    color:var(--star);font:inherit;font-size:13px;line-height:1;vertical-align:middle}
   .star:hover{color:#f5b301}
   .star.on{color:#f5b301}
   .c-name{max-width:88px}
@@ -91,15 +101,16 @@
   .c-name .note{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .c-price{position:relative;white-space:nowrap}
   .c-price .price{font-weight:600}
-  .c-price .sess{font-size:9px;margin-left:3px;padding:0 4px;border-radius:6px;vertical-align:middle}
+  .c-price .sess{font-size:9px;margin-left:3px;padding:0 4px;border-radius:6px;vertical-align:middle;
+    white-space:nowrap;font-weight:600}
   .c-price .sess.st-pre{color:#9a6700;background:rgba(210,153,34,.12)}
   .c-price .sess.st-post{color:#8250df;background:rgba(163,113,247,.12)}
   .c-pct .pct{font-weight:600}
   .c-pct .sub{display:block;color:var(--muted);font-size:10px}
   .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
   .badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;
-    background:rgba(110,118,129,.12);color:#59636e}
-  .badge.st-regular{background:rgba(88,166,255,.14);color:#0969da}
+    background:rgba(110,118,129,.12);color:var(--muted)}
+  .badge.st-regular{background:rgba(88,166,255,.14);color:var(--accent)}
   .badge.st-pre{background:rgba(210,153,34,.14);color:#9a6700}
   .badge.st-post{background:rgba(163,113,247,.14);color:#8250df}
   .flash-up{animation:fu .6s ease-out}
@@ -110,12 +121,12 @@
   /* 智能入板弹窗 */
   .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50}
   .modal-mask[hidden]{display:none}
-  .modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 18px 16px;min-width:320px;position:relative}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 16px;min-width:320px;position:relative;box-shadow:var(--shadow-lg)}
   .modal-title{font-weight:600;margin-bottom:12px;font-size:14px}
   .modal-x{position:absolute;top:8px;right:10px;background:none;border:0;color:var(--muted);font-size:15px;cursor:pointer;padding:2px 6px}
   .modal-x:hover{color:var(--text)}
   .modal-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-  .modal-row input,.modal-row select{flex:1;background:#f6f8fa;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:13px;min-width:0}
+  .modal-row input,.modal-row select{flex:1;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:13px;min-width:0}
   .modal-row input:focus,.modal-row select:focus{outline:none;border-color:var(--accent)}
   .modal button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;width:100%;padding:8px;margin-top:4px}
   .rec-name{margin-bottom:10px;color:var(--muted);font-size:13px}
@@ -124,13 +135,13 @@
   /* 行内移除按钮 */
   .row-del{position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0;
     transition:opacity .12s;background:var(--panel2);border:1px solid var(--border);
-    border-radius:5px;color:#59636e;cursor:pointer;font-size:11px;line-height:1;padding:2px 5px;z-index:2}
+    border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;line-height:1;padding:2px 5px;z-index:2}
   tbody tr:hover .row-del{opacity:1}
   .row-del:hover{color:#f85149;border-color:#f85149}
 
   /* 板块底部添加行 */
-  .card-foot{display:flex;gap:6px;padding:6px 8px;border-top:1px solid var(--border);background:var(--panel2)}
-  .card-foot input{flex:1;min-width:0;background:#f6f8fa;border:1px solid var(--border);color:var(--text);
+  .card-foot{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border);background:var(--panel2)}
+  .card-foot input{flex:1;min-width:0;background:var(--input-bg);border:1px solid var(--border);color:var(--text);
     border-radius:6px;padding:4px 6px;font-size:12px}
   .card-foot input:focus{outline:none;border-color:var(--accent)}
   .card-foot input.add-nm{max-width:84px;flex:0 1 84px}

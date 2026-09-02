@@ -9,6 +9,10 @@
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#f6f8fa; --border:#d0d7de;
     --text:#1f2328; --muted:#59636e; --accent:#0969da;
+    --header-bg:#f6f8fa; --input-bg:#f6f8fa;
+    --radius:12px; --radius-sm:8px;
+    --shadow:0 1px 2px rgba(31,35,40,.04),0 1px 4px rgba(31,35,40,.05);
+    --shadow-lg:0 10px 30px rgba(31,35,40,.14);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -19,7 +23,8 @@
 
   /* 顶栏（复用盯盘页风格） */
   #bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 14px;
-    align-items:center;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+    align-items:center;padding:10px 16px;background:var(--header-bg);border-bottom:1px solid var(--border);
+    box-shadow:0 1px 4px rgba(31,35,40,.05)}
   .brand{font-size:15px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
   .brand img{width:22px;height:22px;border-radius:5px;vertical-align:middle}
   .brand .src{color:var(--muted);font-weight:400;font-size:12px;margin-left:4px}
@@ -38,16 +43,17 @@
   .err{color:#f85149;font-size:12px}
 
   /* 分类筛选条 */
-  .cats{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .cats{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px;background:var(--header-bg);border-bottom:1px solid var(--border)}
   .cats button{padding:4px 10px}
-  .hint{color:var(--muted);font-size:11px;padding:5px 14px;background:#f6f8fa;border-bottom:1px solid var(--border)}
+  .hint{color:var(--muted);font-size:11px;padding:6px 16px;background:var(--header-bg);border-bottom:1px solid var(--border)}
   .hint b{color:var(--accent);font-weight:500}
 
   /* 源卡片网格 */
-  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;padding:12px}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
-  .card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--panel2)}
-  .src-name{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;padding:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow);transition:box-shadow .15s}
+  .card:hover{box-shadow:var(--shadow-lg)}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--panel2),#eef1f4)}
+  .src-name{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:6px}
   .src-name .badge{font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(110,118,129,.18);color:var(--muted);font-weight:600}
   .src-name .badge.proxy{background:rgba(210,153,34,.14);color:#9a6700}
   .src-meta{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -56,7 +62,7 @@
   .src-empty .tag{display:inline-block;padding:1px 6px;border-radius:8px;background:rgba(210,153,34,.14);color:#9a6700;font-size:10px;margin-right:4px}
   .src-error{padding:14px 10px;color:#f85149;font-size:12px}
   ul{list-style:none;margin:0;padding:0}
-  li{padding:7px 10px;border-top:1px solid #d0d7de}
+  li{padding:8px 12px;border-top:1px solid var(--border)}
   li:first-child{border-top:0}
   li:hover{background:var(--panel2)}
   .t{display:block;color:var(--text);font-size:13px;line-height:1.4}
@@ -65,7 +71,7 @@
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .meta{display:flex;justify-content:space-between;align-items:center;margin-top:3px}
   .time{color:var(--muted);font-size:10px;white-space:nowrap}
-  .flag{font-size:9px;padding:0 5px;border-radius:6px;background:rgba(88,166,255,.12);color:#0969da}
+  .flag{font-size:9px;padding:0 5px;border-radius:6px;background:rgba(88,166,255,.12);color:var(--accent)}
 </style>
 </head>
 <body>
