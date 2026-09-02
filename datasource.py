@@ -90,25 +90,88 @@ def _norm_state(s: str) -> str:
     return _STATE_MAP.get((s or "").upper(), "UNKNOWN")
 
 
-def _us_session_state() -> str:
+def _us_session_state(now: Optional[datetime] = None) -> str:
     """按美东时间判定美股盘前/盘中/盘后/休市（自动处理夏令时）。
 
-    盘前 04:00-09:30 ET / 盘中 09:30-16:00 / 盘后 16:00-午夜 / 其余休市。
-    盘后延续到午夜而非 20:00，与 Yahoo 的 POSTPOST→POST 归一化一致，
-    让晚间仍能看到盘后最新价。用于不直接返回 marketState 的数据源（如腾讯）。
+    盘前 04:00-09:30 ET（工作日）/ 盘中 09:30-16:00 / 盘后 16:00 起一直延续
+    到次日 04:00（覆盖午夜后的隔夜电子盘尾段——北京时间白天看盘正落在此窗口，
+    盘后价不能丢）/ 周末休市。now 参数仅供单测注入美东时刻。
+
+    用于不直接返回 marketState 的数据源（腾讯、新浪）。
     """
     from zoneinfo import ZoneInfo
-    now = datetime.now(ZoneInfo("America/New_York"))
-    if now.weekday() >= 5:
-        return "CLOSED"
+    if now is None:
+        now = datetime.now(ZoneInfo("America/New_York"))
     t = now.time()
-    if dt_time(4, 0) <= t < dt_time(9, 30):
+    wd = now.weekday()               # 0=周一 ... 5=周六 6=周日
+    if t < dt_time(4, 0):
+        # 午夜后-清晨4点：上一交易日盘后的隔夜延续（周六凌晨=周五盘后；
+        # 周日凌晨距离上一交易已逾一天，视为休市）
+        return "POST" if wd != 6 else "CLOSED"
+    if t < dt_time(9, 30):
+        return "PRE" if wd < 5 else "CLOSED"
+    if t < dt_time(16, 0):
+        return "REGULAR" if wd < 5 else "CLOSED"
+    return "POST" if wd < 5 else "CLOSED"
+
+
+def _parse_sina_ts(v) -> Optional[float]:
+    """新浪时间戳字段 → epoch 秒。只认数字形式（秒或毫秒）。
+
+    字符串日期无法确定时区（新浪既可能给北京也可能给美东时间），宁缺毋滥：
+    解析不出就返回 None，交给调用方退回墙钟推断。0 或过小值视为占位同样
+    返回 None。
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    num = _f(s)
+    if num is None:
+        return None
+    if num < 1e9:                          # 0/异常小值：不是有效时间戳
+        return None
+    return num / 1000.0 if num > 1e12 else num       # 毫秒 → 秒
+
+
+def _ext_session(ts: Optional[float]) -> Optional[str]:
+    """延展成交 epoch 秒 → 该笔成交所属时段 'PRE'/'POST'/None。
+
+    按成交时刻的美东钟面判断：04:00-09:30 为盘前，16:00 至次日 04:00 为
+    盘后（含午夜后的隔夜段）。落在常规时段或时间戳无效则返回 None。
+    """
+    if not ts:
+        return None
+    from zoneinfo import ZoneInfo
+    try:
+        tt = datetime.fromtimestamp(ts, ZoneInfo("America/New_York")).time()
+    except (OverflowError, OSError, ValueError):
+        return None
+    if dt_time(4, 0) <= tt < dt_time(9, 30):
         return "PRE"
-    if dt_time(9, 30) <= t < dt_time(16, 0):
-        return "REGULAR"
-    if t >= dt_time(16, 0):
+    if tt >= dt_time(16, 0) or tt < dt_time(4, 0):
         return "POST"
-    return "CLOSED"
+    return None
+
+
+def _classify_ext(ext, ext_ts, state):
+    """把新浪延展价 [21] 归位到 (pre, post)。
+
+    首选按延展成交时间戳判定归属——不受当前墙钟影响：午夜后的隔夜价、
+    盘前清晨残留的昨晚盘后价、盘后傍晚残留的今晨盘前价都能正确归位；
+    时间戳不可用时退回按当前时段归位（兜底，等价历史行为）。
+    """
+    if ext in (None, 0):
+        return None, None
+    sess = _ext_session(ext_ts)
+    if sess is None:
+        sess = state if state in ("PRE", "POST") else None
+    if sess == "PRE":
+        return ext, None
+    if sess == "POST":
+        return None, ext
+    return None, None
 
 
 def _resolve_active(state, reg, reg_chg, reg_pct, prev_close, pre, post):
@@ -117,11 +180,14 @@ def _resolve_active(state, reg, reg_chg, reg_pct, prev_close, pre, post):
     保证"涨跌幅"与"当前状态"一致：
     - 盘前：有盘前价 -> 盘前价相对昨收的变动；无盘前成交 -> 0%（价格=昨收）
     - 盘后：有盘后价 -> 盘后价相对昨收的变动；无盘后成交 -> 0%（价格=昨收）
-    - 盘中/休市：常规行情
+    - 盘中：常规行情
+    - 休市（周末）/盘前未开（PREPRE）：常规行情为主，但若存在盘后价则
+      保留之——最后一笔成交往往是盘后价，直接回退常规收盘会让"最新价"
+      看起来跳变（周末与午夜后同理）。
     """
     if state == "PRE" and pre not in (None, 0):
         return pre, _diff(pre, reg), _pct(pre, reg), reg
-    if state == "POST" and post not in (None, 0):
+    if state in ("POST", "CLOSED", "PREPRE") and post not in (None, 0):
         return post, _diff(post, reg), _pct(post, reg), reg
     if state in ("PRE", "POST"):
         return reg, 0.0, 0.0, reg
@@ -359,8 +425,9 @@ class SinaProvider:
     [21]延展时段价 [22]延展涨跌额 [23]延展涨跌幅 [24]延展成交时间戳
     [25]常规收盘时间戳 [26]昨收。
 
-    关键：延展时段价只存于 [21]/[22]/[23]（盘后晚间是盘后价、盘前清晨是盘前价），
-    用 [24] 与 [25] 的时间戳确认它属于盘前还是盘后。历史误读的 [34] 实为
+    关键：延展时段价只存于 [21]/[22]/[23]（盘后晚间是盘后价、盘前清晨是
+    盘前价，午夜后仍是上一交易日的盘后价），按 [24] 延展成交时间戳归位到
+    pre/post（时间戳不可用则退回当前时段墙钟推断）。历史误读的 [34] 实为
     近似收盘价，不可用作盘后价。
     """
     SOURCE = "SINA"
@@ -386,9 +453,10 @@ class SinaProvider:
                     logger.warning("新浪批次 %d-%d 失败: %s", i, i + len(batch), e)
         return out
 
-    def _parse(self, txt: str) -> dict:
+    def _parse(self, txt: str, state: Optional[str] = None) -> dict:
+        """解析新浪返回文本。state 仅供单测注入时段，默认按美东墙钟判定。"""
         out: dict = {}
-        state = _us_session_state()
+        state = state or _us_session_state()
         for line in txt.split("\n"):
             line = line.strip()
             if '="' not in line:
@@ -406,10 +474,11 @@ class SinaProvider:
                 continue
             reg_pct = _f(f[2]); reg_chg = _f(f[4]); prev_close = _f(f[26])
             # 延展时段价统一存于 [21]（[22]涨跌额 [23]涨跌幅 [24]延展成交时间戳）：
-            # 盘后晚间是盘后价、盘前清晨是盘前价，按当前时段归位到 pre/post。
+            # 盘后晚间是盘后价、盘前清晨是盘前价，午夜后仍是盘后价。
+            # 归位依据延展成交时间戳 [24]（墙钟兜底），不受当前看盘时刻影响，
+            # 午夜隔夜/清晨残留都能正确区分 pre/post。
             ext = _f(f[21])
-            pre = ext if state == "PRE" else None
-            post = ext if state == "POST" else None
+            pre, post = _classify_ext(ext, _parse_sina_ts(f[24]), state)
             price, chg, pct, pc = _resolve_active(state, reg, reg_chg, reg_pct, prev_close, pre, post)
             out[sym] = Quote(
                 symbol=sym, name=f[0] or sym,
