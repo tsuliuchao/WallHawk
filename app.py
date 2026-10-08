@@ -27,6 +27,7 @@ from sectors import SECTORS
 from datasource import get_provider
 import news
 import price_alert
+import surge_alert
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -483,10 +484,31 @@ def _alert_loop():
         time.sleep(Config.ALERT_CHECK_INTERVAL)
 
 
+def _collect_watch() -> list:
+    """「今日关注」板块全部标的快照 [(symbol, name), ...]。"""
+    sec = _find_sector(WATCH_KEY)
+    if not sec:
+        return []
+    return [(st.get("symbol", "").upper(), st.get("name", "")) for st in sec["stocks"]]
+
+
+def _surge_loop():
+    """后台轮询：今日关注标的涨幅环比异动推送（默认每 10 分钟一轮）。"""
+    while True:
+        try:
+            watch = _collect_watch()
+            if watch:
+                surge_alert.check(watch, fetch_all())
+        except Exception as e:
+            logger.warning("涨幅环比轮询异常: %s", e)
+        time.sleep(Config.SURGE_CHECK_INTERVAL)
+
+
 if __name__ == "__main__":
     load_sectors()  # 触发种子化
     threading.Thread(target=_warmup, daemon=True).start()
     threading.Thread(target=news._warmup, daemon=True).start()
     threading.Thread(target=_alert_loop, daemon=True).start()
+    threading.Thread(target=_surge_loop, daemon=True).start()
     logger.info("启动: http://localhost:%s  数据源=%s  标的=%d", Config.PORT, Config.DATA_SOURCE, len(_all_symbols()))
     app.run(host=Config.HOST, port=Config.PORT, debug=False, threaded=True)

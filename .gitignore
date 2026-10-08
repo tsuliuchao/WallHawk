@@ -220,3 +220,7 @@ __marimo__/
 # Runtime-generated user state (personal watchlist & alert targets)
 watchlist.json
 alert_state.json
+surge_state.json
+
+# Surge tracking snapshots (data/watch_track/YYYY-MM-DD.jsonl)
+data/
