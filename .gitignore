@@ -217,6 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# CodeGraph local index (machine-local, not for version control)
+.codegraph/
+
 # Runtime-generated user state (personal watchlist & alert targets)
 watchlist.json
 alert_state.json
