@@ -53,10 +53,10 @@ class Config:
     # 仅在美股交易时段（盘前/盘中/盘后）检查价格提醒，避免休市期收盘价反复横跳触发误报。0=关闭(全天检查)
     ALERT_SESSION_ONLY = int(os.environ.get("ALERT_SESSION_ONLY", "1")) == 1
 
-    # ---- 涨幅环比推送（今日关注板块，surge_alert.py）----
+    # ---- 价格环比推送（今日关注板块，surge_alert.py）----
     # 检查间隔（秒），默认 10 分钟
     SURGE_CHECK_INTERVAL = int(os.environ.get("SURGE_CHECK_INTERVAL", "600"))
-    # 环比阈值（百分点）：当前涨幅与上一轮观测涨幅差值绝对值 >= 该值时推送，0=关闭
+    # 环比阈值（%）：当前现价与上一轮现价涨/跌幅 >= 该值时推送，0=关闭
     SURGE_DELTA_PCT = float(os.environ.get("SURGE_DELTA_PCT", "1.0"))
     # 仅在活跃交易时段（盘前/盘中/盘后）做环比检查。0=关闭(全天检查)
     SURGE_SESSION_ONLY = int(os.environ.get("SURGE_SESSION_ONLY", "1")) == 1

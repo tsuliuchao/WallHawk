@@ -493,14 +493,14 @@ def _collect_watch() -> list:
 
 
 def _surge_loop():
-    """后台轮询：今日关注标的涨幅环比异动推送（默认每 10 分钟一轮）。"""
+    """后台轮询：今日关注标的价格环比异动推送（默认每 10 分钟一轮）。"""
     while True:
         try:
             watch = _collect_watch()
             if watch:
                 surge_alert.check(watch, fetch_all())
         except Exception as e:
-            logger.warning("涨幅环比轮询异常: %s", e)
+            logger.warning("价格环比轮询异常: %s", e)
         time.sleep(Config.SURGE_CHECK_INTERVAL)
 
 
